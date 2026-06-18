@@ -1,0 +1,1253 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>徐良个人网站概念演示</title>
+  <style>
+    :root {
+      --bg: #08090d;
+      --panel: rgba(255, 255, 255, 0.075);
+      --panel-strong: rgba(255, 255, 255, 0.12);
+      --line: rgba(255, 255, 255, 0.16);
+      --text: #fff8ea;
+      --muted: rgba(255, 248, 234, 0.68);
+      --dim: rgba(255, 248, 234, 0.45);
+      --hot: #ff4f3f;
+      --gold: #f2b84b;
+      --blue: #63d7e7;
+      --pink: #ff7aa8;
+      --green: #a2d66f;
+      --ink: #101114;
+      --serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+      --sans: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --shadow: 0 34px 90px rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 8%, rgba(255, 79, 63, 0.24), transparent 34vw),
+        radial-gradient(circle at 78% 12%, rgba(99, 215, 231, 0.18), transparent 30vw),
+        linear-gradient(180deg, #08090d 0%, #101018 42%, #08090d 100%);
+      font-family: var(--sans);
+      letter-spacing: 0;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      position: fixed;
+      z-index: 100;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.08;
+      mix-blend-mode: screen;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
+      content: "";
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1,
+    h2 {
+      font-family: var(--serif);
+      font-weight: 1000;
+      letter-spacing: 0;
+    }
+
+    .scroll-progress {
+      position: fixed;
+      z-index: 80;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      transform: scaleX(0);
+      transform-origin: left;
+      background: linear-gradient(90deg, var(--hot), var(--gold), var(--blue));
+    }
+
+    .site-nav {
+      position: fixed;
+      z-index: 70;
+      top: 18px;
+      left: 50%;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 18px;
+      align-items: center;
+      width: min(1180px, calc(100% - 28px));
+      min-height: 64px;
+      padding: 8px 10px 8px 16px;
+      transform: translateX(-50%);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(8, 9, 13, 0.68);
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(22px) saturate(1.35);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 136px;
+    }
+
+    .logo-mark {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--gold), var(--hot));
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 1000;
+    }
+
+    .logo-text {
+      display: grid;
+      gap: 2px;
+    }
+
+    .logo-text strong {
+      font-family: var(--serif);
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .logo-text span {
+      color: var(--dim);
+      font-size: 10px;
+      font-weight: 1000;
+    }
+
+    .nav-links {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+      color: rgba(255, 248, 234, 0.72);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .nav-links a {
+      border-radius: 999px;
+      padding: 10px 14px;
+      transition: background 180ms ease, color 180ms ease;
+    }
+
+    .nav-links a:hover,
+    .nav-links a:focus-visible {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text);
+      outline: none;
+    }
+
+    .nav-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      border: 1px solid rgba(242, 184, 75, 0.45);
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(242, 184, 75, 0.22), rgba(255, 79, 63, 0.15));
+      padding: 0 16px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 1000;
+      transition: transform 180ms ease, border-color 180ms ease;
+    }
+
+    .nav-action:hover,
+    .nav-action:focus-visible {
+      transform: translateY(-2px);
+      border-color: rgba(242, 184, 75, 0.86);
+      outline: none;
+    }
+
+    .section {
+      position: relative;
+      padding: 104px max(24px, calc((100vw - 1180px) / 2));
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 34px;
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 1000;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      font-size: clamp(42px, 6vw, 82px);
+      line-height: 0.96;
+    }
+
+    .section-note {
+      max-width: 520px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.8;
+    }
+
+    .hero {
+      position: relative;
+      min-height: 100svh;
+      padding: 132px max(24px, calc((100vw - 1180px) / 2)) 80px;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      position: absolute;
+      right: 5vw;
+      bottom: -18vw;
+      width: min(720px, 75vw);
+      aspect-ratio: 1;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 50%;
+      background:
+        linear-gradient(135deg, rgba(255, 79, 63, 0.2), transparent 48%),
+        linear-gradient(315deg, rgba(99, 215, 231, 0.18), transparent 52%);
+      content: "";
+      filter: blur(0.2px);
+    }
+
+    .hero-layout {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.02fr) minmax(320px, 0.72fr);
+      gap: 64px;
+      align-items: center;
+      min-height: calc(100svh - 212px);
+    }
+
+    .hero-kicker {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 28px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 1000;
+    }
+
+    .hero-kicker span {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.07);
+      padding: 8px 12px;
+    }
+
+    h1 {
+      font-size: clamp(74px, 12vw, 168px);
+      line-height: 0.82;
+    }
+
+    h1 span {
+      display: block;
+      margin-top: 12px;
+      color: transparent;
+      -webkit-text-stroke: 1px rgba(255, 248, 234, 0.78);
+      font-family: var(--sans);
+      font-size: clamp(34px, 5vw, 74px);
+      letter-spacing: 0;
+    }
+
+    .hero-lead {
+      max-width: 650px;
+      margin-top: 34px;
+      color: var(--muted);
+      font-size: clamp(17px, 2vw, 21px);
+      line-height: 1.9;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 36px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 54px;
+      border-radius: 999px;
+      padding: 0 22px;
+      font-size: 14px;
+      font-weight: 1000;
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+    }
+
+    .btn:hover,
+    .btn:focus-visible {
+      transform: translateY(-3px);
+      outline: none;
+    }
+
+    .btn-primary {
+      border: 1px solid rgba(242, 184, 75, 0.5);
+      background: linear-gradient(135deg, var(--gold), var(--hot));
+      color: var(--ink);
+    }
+
+    .btn-ghost {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+
+    .hero-player {
+      position: relative;
+      min-height: 620px;
+    }
+
+    .artist-visual {
+      position: absolute;
+      inset: 0 0 92px;
+      border-radius: 42% 58% 40% 60% / 50% 38% 62% 50%;
+      background:
+        linear-gradient(180deg, transparent 0 52%, rgba(8, 9, 13, 0.76) 86%),
+        url("src/assets/hero.png") center / min(68%, 360px) auto no-repeat,
+        radial-gradient(circle at 50% 22%, rgba(255, 248, 234, 0.2), transparent 35%),
+        linear-gradient(135deg, rgba(255, 79, 63, 0.72), rgba(99, 215, 231, 0.35) 48%, rgba(242, 184, 75, 0.54));
+      box-shadow: var(--shadow);
+    }
+
+    .player-card {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 32px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(8, 9, 13, 0.74);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      backdrop-filter: blur(20px);
+    }
+
+    .now-playing {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .disc {
+      width: 56px;
+      height: 56px;
+      border: 10px solid rgba(255, 248, 234, 0.16);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle, var(--ink) 0 16%, transparent 17%),
+        conic-gradient(from 90deg, var(--hot), var(--gold), var(--blue), var(--pink), var(--hot));
+      animation: spin 8s linear infinite;
+    }
+
+    .song-title {
+      font-size: 18px;
+      font-weight: 1000;
+    }
+
+    .song-meta {
+      margin-top: 6px;
+      color: var(--dim);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .play-dot {
+      width: 58px;
+      height: 58px;
+      border: 0;
+      border-radius: 50%;
+      background: var(--text);
+      color: var(--ink);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 1000;
+    }
+
+    .wave {
+      display: grid;
+      grid-template-columns: repeat(24, 1fr);
+      gap: 5px;
+      align-items: end;
+      height: 82px;
+      margin-top: 24px;
+    }
+
+    .wave span {
+      display: block;
+      border-radius: 999px;
+      background: linear-gradient(180deg, var(--gold), var(--hot));
+      transform-origin: bottom;
+      animation: pulse 1.2s ease-in-out infinite alternate;
+    }
+
+    .wave span:nth-child(3n) {
+      background: linear-gradient(180deg, var(--blue), var(--green));
+      animation-delay: 0.14s;
+    }
+
+    .wave span:nth-child(4n) {
+      animation-delay: 0.28s;
+    }
+
+    .music-shell {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 22px;
+      align-items: stretch;
+    }
+
+    .featured-album,
+    .track,
+    .video-main,
+    .video-side,
+    .tour-board,
+    .about-card,
+    .story-item,
+    .subscribe {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+    }
+
+    .featured-album {
+      padding: 18px;
+    }
+
+    .album-cover {
+      display: grid;
+      place-items: center;
+      min-height: 330px;
+      border-radius: 6px;
+      background:
+        radial-gradient(circle at 34% 28%, rgba(255, 248, 234, 0.2), transparent 26%),
+        linear-gradient(135deg, var(--hot), #2d1c38 48%, var(--blue));
+      font-family: var(--serif);
+      font-size: 48px;
+      font-weight: 1000;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    }
+
+    .album-meta {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .album-meta h3 {
+      font-size: 24px;
+    }
+
+    .album-meta p {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .track-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .track {
+      display: grid;
+      grid-template-columns: 54px minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: center;
+      min-height: 82px;
+      padding: 18px;
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+    }
+
+    .track:hover {
+      transform: translateX(6px);
+      border-color: rgba(242, 184, 75, 0.5);
+      background: var(--panel-strong);
+    }
+
+    .track-number {
+      color: var(--gold);
+      font-size: 13px;
+      font-weight: 1000;
+    }
+
+    .track h3 {
+      font-size: 19px;
+    }
+
+    .track p {
+      margin-top: 6px;
+      color: var(--dim);
+      font-size: 13px;
+    }
+
+    .track-time {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 1000;
+    }
+
+    .film-strip {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(250px, 1fr));
+      gap: 16px;
+    }
+
+    .photo-card {
+      position: relative;
+      min-height: 380px;
+      overflow: hidden;
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, transparent 44%, rgba(8, 9, 13, 0.82)),
+        linear-gradient(135deg, rgba(255, 79, 63, 0.78), rgba(99, 215, 231, 0.46));
+    }
+
+    .photo-card:nth-child(2n) {
+      background:
+        linear-gradient(180deg, transparent 44%, rgba(8, 9, 13, 0.82)),
+        linear-gradient(135deg, rgba(242, 184, 75, 0.72), rgba(255, 122, 168, 0.52));
+    }
+
+    .photo-card:nth-child(3n) {
+      background:
+        linear-gradient(180deg, transparent 44%, rgba(8, 9, 13, 0.82)),
+        linear-gradient(135deg, rgba(99, 215, 231, 0.68), rgba(162, 214, 111, 0.46));
+    }
+
+    .photo-label {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      left: 16px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 1000;
+    }
+
+    .video-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 22px;
+    }
+
+    .video-main {
+      overflow: hidden;
+    }
+
+    .video-frame {
+      position: relative;
+      min-height: 430px;
+      background:
+        linear-gradient(180deg, transparent 36%, rgba(8, 9, 13, 0.78)),
+        radial-gradient(circle at 50% 38%, rgba(255, 248, 234, 0.16), transparent 34%),
+        linear-gradient(135deg, rgba(255, 79, 63, 0.7), rgba(99, 215, 231, 0.42));
+    }
+
+    .video-play {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      display: grid;
+      place-items: center;
+      width: 90px;
+      height: 90px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: rgba(255, 248, 234, 0.92);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 1000;
+    }
+
+    .video-copy {
+      padding: 24px;
+    }
+
+    .video-copy h3 {
+      font-size: 25px;
+    }
+
+    .video-copy p {
+      margin-top: 10px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .video-side {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .video-item {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 14px;
+      align-items: center;
+      min-height: 88px;
+      border-radius: 6px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.055);
+    }
+
+    .video-thumb {
+      height: 68px;
+      border-radius: 5px;
+      background: linear-gradient(135deg, var(--hot), var(--gold), var(--blue));
+    }
+
+    .video-item h3 {
+      font-size: 16px;
+    }
+
+    .video-item p {
+      margin-top: 6px;
+      color: var(--dim);
+      font-size: 12px;
+    }
+
+    .tour-board {
+      overflow: hidden;
+    }
+
+    .tour-row {
+      display: grid;
+      grid-template-columns: 140px 1fr 2fr auto;
+      gap: 18px;
+      align-items: center;
+      min-height: 96px;
+      padding: 22px 24px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tour-row:last-child {
+      border-bottom: 0;
+    }
+
+    .tour-date {
+      color: var(--gold);
+      font-size: 34px;
+      font-weight: 1000;
+    }
+
+    .tour-city {
+      font-size: 24px;
+      font-weight: 1000;
+    }
+
+    .tour-venue {
+      color: var(--muted);
+    }
+
+    .tour-status {
+      border: 1px solid rgba(242, 184, 75, 0.42);
+      border-radius: 999px;
+      padding: 9px 12px;
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 1000;
+    }
+
+    .about-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .about-card {
+      padding: 28px;
+    }
+
+    .about-card p:not(.eyebrow) {
+      margin-top: 18px;
+      color: var(--muted);
+      line-height: 1.9;
+    }
+
+    .story-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .story-item {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 18px;
+      padding: 22px;
+    }
+
+    .story-item strong {
+      color: var(--gold);
+      font-size: 20px;
+    }
+
+    .story-item span {
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .site-footer {
+      padding: 104px max(24px, calc((100vw - 1180px) / 2)) 32px;
+      background: #050609;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 380px;
+      gap: 36px;
+      align-items: start;
+    }
+
+    .footer-title h2 {
+      font-size: clamp(44px, 7vw, 96px);
+      line-height: 0.95;
+    }
+
+    .footer-title > p:not(.eyebrow) {
+      max-width: 640px;
+      margin-top: 18px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .social-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .social-links a {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 13px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .subscribe {
+      padding: 24px;
+    }
+
+    .subscribe h3 {
+      font-size: 24px;
+    }
+
+    .subscribe p:not(.eyebrow) {
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .subscribe-control {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .subscribe-control input,
+    .subscribe-control button {
+      min-height: 48px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+    }
+
+    .subscribe-control input {
+      width: 100%;
+      min-width: 0;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0 14px;
+      color: var(--text);
+    }
+
+    .subscribe-control button {
+      background: var(--text);
+      color: var(--ink);
+      padding: 0 18px;
+      cursor: pointer;
+      font-weight: 1000;
+    }
+
+    .copyright {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      margin-top: 70px;
+      color: var(--dim);
+      font-size: 13px;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 700ms ease, transform 700ms ease;
+    }
+
+    .reveal.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes pulse {
+      from {
+        transform: scaleY(0.32);
+      }
+
+      to {
+        transform: scaleY(1);
+      }
+    }
+
+    @media (max-width: 920px) {
+      .site-nav {
+        grid-template-columns: 1fr auto;
+        border-radius: 24px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .hero-layout,
+      .music-shell,
+      .video-grid,
+      .about-layout,
+      .footer-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-player {
+        min-height: 520px;
+      }
+
+      .section-head {
+        grid-template-columns: 1fr;
+      }
+
+      .film-strip {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .tour-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .section,
+      .hero,
+      .site-footer {
+        padding-right: 18px;
+        padding-left: 18px;
+      }
+
+      .hero {
+        padding-top: 116px;
+      }
+
+      .logo {
+        min-width: 0;
+      }
+
+      .logo-text span {
+        display: none;
+      }
+
+      .hero-player {
+        min-height: 430px;
+      }
+
+      .artist-visual {
+        bottom: 82px;
+      }
+
+      .player-card {
+        left: 0;
+        padding: 16px;
+      }
+
+      .now-playing {
+        grid-template-columns: auto 1fr;
+      }
+
+      .play-dot {
+        grid-column: 1 / -1;
+        width: 100%;
+        height: 44px;
+        border-radius: 999px;
+      }
+
+      .track {
+        grid-template-columns: 38px 1fr;
+      }
+
+      .track-time {
+        grid-column: 2;
+      }
+
+      .film-strip {
+        grid-template-columns: 1fr;
+      }
+
+      .photo-card {
+        min-height: 300px;
+      }
+
+      .story-item,
+      .video-item {
+        grid-template-columns: 1fr;
+      }
+
+      .subscribe-control,
+      .copyright {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="scroll-progress"></div>
+
+  <nav class="site-nav">
+    <a class="logo" href="#home" aria-label="徐良首页">
+      <span class="logo-mark">XL</span>
+      <span class="logo-text">
+        <strong>徐良</strong>
+        <span>OFFICIAL SITE CONCEPT</span>
+      </span>
+    </a>
+    <div class="nav-links" aria-label="主要导航">
+      <a href="#music">音乐</a>
+      <a href="#photos">照片</a>
+      <a href="#videos">视频</a>
+      <a href="#tour">演出</a>
+      <a href="#about">关于</a>
+    </div>
+    <a class="nav-action" href="#music">开始听</a>
+  </nav>
+
+  <header class="hero" id="home">
+    <div class="hero-layout">
+      <div class="hero-copy">
+        <div class="hero-kicker reveal">
+          <span>Music</span>
+          <span>Photos</span>
+          <span>Tour</span>
+        </div>
+        <h1 class="reveal">徐良<span>Official</span></h1>
+        <p class="hero-lead reveal">一个围绕音乐、照片集、视频和演出的个人官网概念。首页不再堆满所有内容，而是像一个高级播放器，把用户自然带到音乐和影像里。</p>
+        <div class="hero-actions reveal">
+          <a class="btn btn-primary" href="#music">进入音乐库</a>
+          <a class="btn btn-ghost" href="#photos">查看照片集</a>
+        </div>
+      </div>
+
+      <div class="hero-player reveal">
+        <div class="artist-visual" aria-hidden="true"></div>
+        <div class="player-card">
+          <div class="now-playing">
+            <div class="disc" aria-hidden="true"></div>
+            <div>
+              <div class="song-title">青春旋律 Demo</div>
+              <div class="song-meta">Latest Release / 2026 / Concept Track</div>
+            </div>
+            <button class="play-dot" type="button">PLAY</button>
+          </div>
+          <div class="wave" aria-hidden="true">
+            <span style="height:38%"></span><span style="height:66%"></span><span style="height:42%"></span><span style="height:82%"></span>
+            <span style="height:54%"></span><span style="height:92%"></span><span style="height:48%"></span><span style="height:74%"></span>
+            <span style="height:60%"></span><span style="height:34%"></span><span style="height:88%"></span><span style="height:46%"></span>
+            <span style="height:68%"></span><span style="height:52%"></span><span style="height:96%"></span><span style="height:40%"></span>
+            <span style="height:72%"></span><span style="height:58%"></span><span style="height:84%"></span><span style="height:44%"></span>
+            <span style="height:76%"></span><span style="height:50%"></span><span style="height:90%"></span><span style="height:62%"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="section music-section" id="music">
+      <div class="section-head reveal">
+        <div>
+          <p class="eyebrow">Music Library</p>
+          <h2>让音乐成为首页主角</h2>
+        </div>
+        <p class="section-note">把单曲、专辑、合作作品放在一个更像播放器的区域里。后续可以接真实播放平台链接、专辑封面和年份筛选。</p>
+      </div>
+
+      <div class="music-shell">
+        <aside class="featured-album reveal">
+          <div class="album-cover">XL</div>
+          <div class="album-meta">
+            <h3>精选作品集</h3>
+            <p>用于承载主推专辑、新歌或巡演主题视觉，替换真实封面后即可上线为内容入口。</p>
+          </div>
+        </aside>
+        <div class="track-list">
+          <article class="track reveal">
+            <div class="track-number">01</div>
+            <div><h3>客官不可以</h3><p>Single / Pop Memory</p></div>
+            <div class="track-time">03:42</div>
+          </article>
+          <article class="track reveal">
+            <div class="track-number">02</div>
+            <div><h3>犯贱</h3><p>Single / Collaboration</p></div>
+            <div class="track-time">04:06</div>
+          </article>
+          <article class="track reveal">
+            <div class="track-number">03</div>
+            <div><h3>后会无期</h3><p>Single / Acoustic</p></div>
+            <div class="track-time">03:58</div>
+          </article>
+          <article class="track reveal">
+            <div class="track-number">04</div>
+            <div><h3>红装</h3><p>Single / Classic</p></div>
+            <div class="track-time">04:18</div>
+          </article>
+          <article class="track reveal">
+            <div class="track-number">05</div>
+            <div><h3>新歌预告</h3><p>Demo / Coming Soon</p></div>
+            <div class="track-time">NEW</div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section photo-section" id="photos">
+      <div class="section-head reveal">
+        <div>
+          <p class="eyebrow">Photo Archive</p>
+          <h2>照片集要有记忆点</h2>
+        </div>
+        <p class="section-note">照片集可以承载演唱会现场、幕后、写真、粉丝视角。真实照片一换上来，整个网站会立刻从 demo 变成作品集。</p>
+      </div>
+
+      <div class="film-strip">
+        <article class="photo-card reveal"><div class="photo-label"><span>LIVE</span><span>01</span></div></article>
+        <article class="photo-card reveal"><div class="photo-label"><span>BACKSTAGE</span><span>02</span></div></article>
+        <article class="photo-card reveal"><div class="photo-label"><span>PORTRAIT</span><span>03</span></div></article>
+        <article class="photo-card reveal"><div class="photo-label"><span>STUDIO</span><span>04</span></div></article>
+        <article class="photo-card reveal"><div class="photo-label"><span>FANS</span><span>05</span></div></article>
+        <article class="photo-card reveal"><div class="photo-label"><span>TOUR</span><span>06</span></div></article>
+      </div>
+    </section>
+
+    <section class="section" id="videos">
+      <div class="section-head reveal">
+        <div>
+          <p class="eyebrow">Videos</p>
+          <h2>视频区让页面动起来</h2>
+        </div>
+        <p class="section-note">MV、现场、采访、幕后可以集中在这里。首页只露出一个主视频，其余内容放成侧栏列表。</p>
+      </div>
+
+      <div class="video-grid">
+        <article class="video-main reveal">
+          <div class="video-frame">
+            <div class="video-play">PLAY</div>
+          </div>
+          <div class="video-copy">
+            <h3>主推 MV / 现场影像</h3>
+            <p>适合放最新 MV、巡演预告片或现场精选。视觉重点放大，用户不用在一堆小卡片里找主内容。</p>
+          </div>
+        </article>
+        <div class="video-side reveal">
+          <article class="video-item">
+            <div class="video-thumb"></div>
+            <div><h3>幕后花絮</h3><p>Backstage / 04:12</p></div>
+          </article>
+          <article class="video-item">
+            <div class="video-thumb"></div>
+            <div><h3>现场片段</h3><p>Live Clip / 03:20</p></div>
+          </article>
+          <article class="video-item">
+            <div class="video-thumb"></div>
+            <div><h3>访谈记录</h3><p>Interview / 08:36</p></div>
+          </article>
+          <article class="video-item">
+            <div class="video-thumb"></div>
+            <div><h3>新歌预告</h3><p>Teaser / 01:15</p></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section tour-section" id="tour">
+      <div class="section-head reveal">
+        <div>
+          <p class="eyebrow">Tour Dates</p>
+          <h2>演出板块保持实用</h2>
+        </div>
+        <p class="section-note">演出信息重点是日期、城市、场馆和状态。视觉可以强，但信息不能难找。</p>
+      </div>
+
+      <div class="tour-board">
+        <article class="tour-row reveal">
+          <div class="tour-date">08.15</div>
+          <div class="tour-city">北京</div>
+          <div class="tour-venue">国家体育馆 / 19:30</div>
+          <div class="tour-status">已开票</div>
+        </article>
+        <article class="tour-row reveal">
+          <div class="tour-date">09.10</div>
+          <div class="tour-city">上海</div>
+          <div class="tour-venue">梅赛德斯奔驰文化中心 / 20:00</div>
+          <div class="tour-status">即将开票</div>
+        </article>
+        <article class="tour-row reveal">
+          <div class="tour-date">10.22</div>
+          <div class="tour-city">广州</div>
+          <div class="tour-venue">天河体育馆 / 19:00</div>
+          <div class="tour-status">已开票</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="about">
+      <div class="about-layout">
+        <article class="about-card reveal">
+          <p class="eyebrow">About</p>
+          <h2>关于徐良</h2>
+          <p>关于页不建议写成长篇百科，而是把代表作品、创作阶段、演出节点整理成一条可阅读的故事线。用户看完音乐和照片以后，再来到这里，会更容易建立完整印象。</p>
+        </article>
+        <div class="story-list">
+          <article class="story-item reveal">
+            <strong>2010</strong>
+            <span>代表作品进入大众视野，形成鲜明的网络音乐记忆点。</span>
+          </article>
+          <article class="story-item reveal">
+            <strong>2011-2016</strong>
+            <span>作品库扩展，合作、专辑和创作风格逐渐沉稳。</span>
+          </article>
+          <article class="story-item reveal">
+            <strong>Now</strong>
+            <span>围绕新歌、现场、影像和粉丝互动，形成更完整的个人官网内容体系。</span>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div class="footer-title reveal">
+        <p class="eyebrow">Keep Listening</p>
+        <h2>继续听他的歌</h2>
+        <p>底部承担读者去向、社交平台、订阅和版权，不抢主内容的位置。真实上线时可以接微博、抖音、B站、网易云、QQ音乐等入口。</p>
+        <div class="social-links">
+          <a href="#">微博</a>
+          <a href="#">抖音</a>
+          <a href="#">B站</a>
+          <a href="#">网易云</a>
+          <a href="#">QQ音乐</a>
+        </div>
+      </div>
+      <form class="subscribe reveal">
+        <p class="eyebrow">Newsletter</p>
+        <h3>新歌和演出提醒</h3>
+        <p>留下邮箱，接收新歌发布、城市开票和巡演动态。</p>
+        <div class="subscribe-control">
+          <input type="email" placeholder="your@email.com" />
+          <button type="button">订阅</button>
+        </div>
+      </form>
+    </div>
+    <div class="copyright reveal">
+      <span>© 2026 徐良工作室 / Personal website concept demo</span>
+      <a href="#home">回到顶部</a>
+    </div>
+  </footer>
+
+  <script>
+    const progress = document.querySelector('.scroll-progress');
+    const revealItems = document.querySelectorAll('.reveal');
+    const playButton = document.querySelector('.play-dot');
+
+    const updateProgress = () => {
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      const ratio = scrollable > 0 ? window.scrollY / scrollable : 0;
+      progress.style.transform = `scaleX(${Math.max(0, Math.min(1, ratio))})`;
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.16 });
+
+    revealItems.forEach((item) => observer.observe(item));
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    window.addEventListener('resize', updateProgress);
+    updateProgress();
+
+    playButton.addEventListener('click', () => {
+      const isPlaying = playButton.textContent === 'PAUSE';
+      playButton.textContent = isPlaying ? 'PLAY' : 'PAUSE';
+      document.body.classList.toggle('is-playing', !isPlaying);
+    });
+  </script>
+</body>
+</html>

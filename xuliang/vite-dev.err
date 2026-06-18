@@ -1,0 +1,27 @@
+[31mfailed to load config from F:\我的项目\web\xuliang\vite.config.js[39m
+[31merror when starting dev server:
+Error: Build failed with 1 error:
+
+[plugin externalize-deps]
+Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:420:11)
+    at spawn (node:child_process:787:9)
+    at Object.execFile (node:child_process:349:17)
+    at exec (node:child_process:236:25)
+    at optimizeSafeRealPathSync (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/chunks/node.js:1950:2)
+    at windowsSafeRealPathSync (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/chunks/node.js:1936:3)
+    at getRealPath (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/chunks/node.js:32684:36)
+    at tryResolveRealFileOrType (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/chunks/node.js:32678:9)
+    at tryCleanFsResolve (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/chunks/node.js:32427:21)
+    at tryFsResolve (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/chunks/node.js:32420:14)
+    at aggregateBindingErrorsIntoJsError (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/rolldown/dist/shared/error-BuvQYXuZ.mjs:48:18)
+    at unwrapBindingResult (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/rolldown/dist/shared/error-BuvQYXuZ.mjs:18:128)
+    at #build (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/rolldown/dist/shared/rolldown-build-CrPk_lZe.mjs:3246:34)
+    at async bundleConfigFile (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/chunks/node.js:34962:17)
+    at async bundleAndLoadConfigFile (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/chunks/node.js:34870:18)
+    at async loadConfigFromFile (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/chunks/node.js:34839:42)
+    at async resolveConfig (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/chunks/node.js:34465:22)
+    at async _createServer (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/chunks/node.js:26197:65)
+    at async CAC.<anonymous> (file:///F:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/web/xuliang/node_modules/vite/dist/node/cli.js:708:18) {
+  errors: [Getter/Setter]
+}[39m
