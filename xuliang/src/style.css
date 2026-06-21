@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+/* 引入自定义字体 */
+@font-face {
+  font-family: 'cfracelyncetta';
+  src: url('./assets/font/cfracelyncettademoregular-2v4y8.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --font-cfracelyncetta: 'cfracelyncetta', sans-serif;
+}
+
 @layer base {
   html {
     background: #08090d;

@@ -1,287 +1,309 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { gsap } from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import heroImg from '../assets/hero.png'
+import { markRaw, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { gsap } from "gsap";
+import { Observer } from "gsap/Observer";
+import HeroPanel from "../components/home/HeroPanel.vue";
+import PhotosPanel from "../components/home/PhotosPanel.vue";
+import StoryPanel from "../components/home/StoryPanel.vue";
+import TracksPanel from "../components/home/TracksPanel.vue";
 
-gsap.registerPlugin(ScrollTrigger)
+gsap.registerPlugin(Observer);
 
-const root = ref(null)
-let context
-let activePanel = -1
+const root = ref(null);
+const activeIndex = ref(0);
 
-const setActiveDot = (dots, index) => {
-  if (activePanel === index) return
+const panels = [
+  {
+    label: "徐良",
+    background:
+      "radial-gradient(circle at 16% 18%, rgba(255,79,63,0.42), transparent 34vw), radial-gradient(circle at 82% 22%, rgba(99,215,231,0.34), transparent 30vw), linear-gradient(135deg, #08090d 0%, #26131d 48%, #07323b 100%)",
+    component: markRaw(HeroPanel)
+  },
+  {
+    label: "精选作品集",
+    background:
+      "radial-gradient(circle at 76% 18%, rgba(242,184,75,0.42), transparent 30vw), radial-gradient(circle at 14% 78%, rgba(255,122,168,0.28), transparent 32vw), linear-gradient(135deg, #140d11 0%, #33200c 46%, #101114 100%)",
+    component: markRaw(TracksPanel)
+  },
+  {
+    label: "照片集",
+    background:
+      "radial-gradient(circle at 18% 20%, rgba(99,215,231,0.42), transparent 30vw), radial-gradient(circle at 86% 76%, rgba(162,214,111,0.3), transparent 32vw), linear-gradient(135deg, #07161b 0%, #132333 52%, #08090d 100%)",
+    component: markRaw(PhotosPanel)
+  },
+  {
+    label: "关于徐良",
+    background:
+      "radial-gradient(circle at 20% 24%, rgba(162,214,111,0.34), transparent 28vw), radial-gradient(circle at 78% 20%, rgba(255,79,63,0.24), transparent 30vw), linear-gradient(135deg, #101114 0%, #172112 46%, #08090d 100%)",
+    component: markRaw(StoryPanel)
+  }
+];
 
-  activePanel = index
-  dots.forEach((dot, dotIndex) => {
-    gsap.to(dot, {
-      height: dotIndex === index ? 28 : 8,
-      opacity: dotIndex === index ? 1 : 0.42,
-      scale: dotIndex === index ? 1 : 0.92,
-      duration: 0.24,
-      ease: 'power2.out',
-      overwrite: true,
-    })
-  })
-}
+const navItems = [
+  { label: "首页", panelIndex: 0 },
+  { label: "音乐", panelIndex: 1 },
+  { label: "影像", panelIndex: 2 },
+  { label: "关于", panelIndex: 3 }
+];
 
-onMounted(async () => {
-  if ('scrollRestoration' in window.history) {
-    window.history.scrollRestoration = 'manual'
+let context;
+let observer;
+let transitionToPanel;
+let releasedToFooter = false;
+
+const getPanelTop = () => {
+  if (!root.value) return 0;
+
+  return root.value.getBoundingClientRect().top + window.scrollY;
+};
+
+const lockPanelScroll = () => {
+  if (!root.value || releasedToFooter) return;
+
+  const panelTop = getPanelTop();
+  if (Math.abs(window.scrollY - panelTop) > 1) {
+    window.scrollTo({ top: panelTop, left: 0, behavior: "auto" });
+  }
+};
+
+const scrollPastPanels = () => {
+  if (!root.value) return;
+
+  releasedToFooter = true;
+  const nextTop = getPanelTop() + root.value.offsetHeight;
+  window.scrollTo({ top: nextTop, left: 0, behavior: "smooth" });
+};
+
+const handleWindowScroll = () => {
+  if (!releasedToFooter) {
+    lockPanelScroll();
+    return;
   }
 
-  window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-  await nextTick()
+  if (window.scrollY <= getPanelTop() + 1) {
+    releasedToFooter = false;
+  }
+};
+
+const selectPanel = (index) => {
+  const direction = index > activeIndex.value ? 1 : -1;
+  transitionToPanel?.(index, direction);
+};
+
+const handleKeydown = (event) => {
+  if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === " ") {
+    event.preventDefault();
+
+    if (activeIndex.value === panels.length - 1) {
+      scrollPastPanels();
+    } else {
+      transitionToPanel?.(activeIndex.value + 1, 1);
+    }
+  }
+
+  if (event.key === "ArrowUp" || event.key === "PageUp") {
+    event.preventDefault();
+    transitionToPanel?.(activeIndex.value - 1, -1);
+  }
+};
+
+onMounted(async () => {
+  if ("scrollRestoration" in window.history) {
+    window.history.scrollRestoration = "manual";
+  }
+
+  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  await nextTick();
 
   context = gsap.context(() => {
-    const stage = root.value.querySelector('.flip-stage')
-    const panels = gsap.utils.toArray('.flip-panel', root.value)
-    const dots = gsap.utils.toArray('.page-dot', root.value)
-    const panelContent = gsap.utils.toArray('.panel-content', root.value)
+    const panelElements = gsap.utils.toArray(".loop-panel", root.value);
+    const outerWrappers = gsap.utils.toArray(".loop-outer", root.value);
+    const innerWrappers = gsap.utils.toArray(".loop-inner", root.value);
+    const contents = gsap.utils.toArray(".panel-content", root.value);
+    const visuals = gsap.utils.toArray(".panel-visual", root.value);
+    const wrappers = [...outerWrappers, ...innerWrappers];
+    const lastIndex = panelElements.length - 1;
+    let currentIndex = 0;
+    let animating = false;
 
-    activePanel = -1
+    gsap.set(panelElements, { autoAlpha: 0, zIndex: 0 });
+    gsap.set(panelElements[0], { autoAlpha: 1, zIndex: 1 });
+    gsap.set(wrappers, { yPercent: 0 });
+    gsap.set(contents, { autoAlpha: 0, y: 48 });
+    gsap.set(visuals, { autoAlpha: 0, scale: 0.96, y: 22 });
+    gsap.set(contents[0], { autoAlpha: 1, y: 0 });
+    gsap.set(visuals[0], { autoAlpha: 1, scale: 1, y: 0 });
 
-    gsap.set(panels, {
-      autoAlpha: 0,
-      force3D: true,
-      rotateX: -26,
-      scale: 0.86,
-      transformOrigin: '50% 58%',
-      transformPerspective: 1400,
-      yPercent: 112,
-    })
+    transitionToPanel = (index, direction = 1) => {
+      const nextIndex = gsap.utils.clamp(0, lastIndex, index);
 
-    gsap.set(panels[0], {
-      autoAlpha: 1,
-      rotateX: 0,
-      scale: 1,
-      yPercent: 0,
-    })
+      if (animating || nextIndex === currentIndex) return;
 
-    gsap.set(panelContent, { autoAlpha: 0, y: 34 })
-    gsap.set(panelContent[0], { autoAlpha: 1, y: 0 })
+      releasedToFooter = false;
+      lockPanelScroll();
+      animating = true;
+      activeIndex.value = nextIndex;
 
-    setActiveDot(dots, 0)
+      const currentPanel = panelElements[currentIndex];
+      const nextPanel = panelElements[nextIndex];
+      const currentOuter = outerWrappers[currentIndex];
+      const currentInner = innerWrappers[currentIndex];
+      const nextOuter = outerWrappers[nextIndex];
+      const nextInner = innerWrappers[nextIndex];
+      const currentContent = contents[currentIndex];
+      const nextContent = contents[nextIndex];
+      const currentVisual = visuals[currentIndex];
+      const nextVisual = visuals[nextIndex];
+      const currentVisualIsLight = currentVisual?.dataset.lightVisual === "true";
+      const nextVisualIsLight = nextVisual?.dataset.lightVisual === "true";
+      const y = direction > 0 ? 1 : -1;
 
-    const timeline = gsap.timeline({
-      defaults: { ease: 'none' },
-      scrollTrigger: {
-        trigger: root.value,
-        start: 'top top',
-        end: () => `+=${window.innerHeight * (panels.length - 1)}`,
-        scrub: 0.35,
-        pin: stage,
-        anticipatePin: 1,
-        invalidateOnRefresh: true,
-        snap: {
-          snapTo: 1 / (panels.length - 1),
-          delay: 0.04,
-          duration: { min: 0.12, max: 0.28 },
-          ease: 'power1.out',
-          inertia: false,
-        },
-        onUpdate: (self) => {
-          const index = Math.round(self.progress * (panels.length - 1))
-          setActiveDot(dots, index)
-        },
-      },
-    })
-
-    panels.forEach((panel, index) => {
-      if (index === 0) return
-
-      const previousPanel = panels[index - 1]
-      const previousContent = panelContent[index - 1]
-      const content = panelContent[index]
-      const position = index - 1
-
-      timeline
+      gsap
+        .timeline({
+          defaults: { duration: 1, ease: "power4.inOut" },
+          onComplete: () => {
+            gsap.set(currentPanel, { autoAlpha: 0, zIndex: 0 });
+            gsap.set(nextPanel, { zIndex: 1 });
+            currentIndex = nextIndex;
+            animating = false;
+          }
+        })
+        .set(nextPanel, { autoAlpha: 1, zIndex: 2 }, 0)
+        .fromTo(nextOuter, { yPercent: 100 * y }, { yPercent: 0 }, 0)
+        .fromTo(nextInner, { yPercent: -100 * y }, { yPercent: 0 }, 0)
+        .to(currentOuter, { yPercent: -100 * y }, 0)
+        .to(currentInner, { yPercent: 100 * y }, 0)
+        .to(currentContent, { autoAlpha: 0, y: -72 * y, duration: 0.5, ease: "power3.in" }, 0)
         .to(
-          previousContent,
+          currentVisual,
           {
             autoAlpha: 0,
-            y: -28,
-            duration: 0.34,
+            scale: currentVisualIsLight ? 1 : 0.92,
+            y: (currentVisualIsLight ? -14 : -34) * y,
+            duration: currentVisualIsLight ? 0.38 : 0.58,
+            ease: "power3.in"
           },
-          position,
+          0
         )
-        .to(
-          previousPanel,
+        .fromTo(nextContent, { autoAlpha: 0, y: 82 * y }, { autoAlpha: 1, y: 0, duration: 0.72, ease: "power3.out" }, 0.24)
+        .fromTo(
+          nextVisual,
           {
-            autoAlpha: 0,
-            rotateX: 22,
-            scale: 0.88,
-            yPercent: -68,
-            duration: 0.9,
+            autoAlpha: nextVisualIsLight ? 0.74 : 0.35,
+            scale: nextVisualIsLight ? 1 : 1.12,
+            y: (nextVisualIsLight ? 16 : 44) * y,
+            rotate: nextVisualIsLight ? 0 : -3 * y
           },
-          position,
-        )
-        .to(
-          panel,
           {
             autoAlpha: 1,
-            rotateX: 0,
             scale: 1,
-            yPercent: 0,
-            duration: 0.9,
-          },
-          position + 0.08,
-        )
-        .to(
-          content,
-          {
-            autoAlpha: 1,
             y: 0,
-            duration: 0.54,
+            rotate: 0,
+            duration: nextVisualIsLight ? 0.52 : 0.95,
+            ease: "power3.out"
           },
-          position + 0.38,
-        )
-    })
+          0.12
+        );
+    };
 
-    ScrollTrigger.refresh()
-  }, root)
-})
+    observer = Observer.create({
+      target: root.value,
+      type: "wheel,touch,pointer",
+      wheelSpeed: -1,
+      tolerance: 16,
+      preventDefault: true,
+      onUp: () => {
+        if (currentIndex === lastIndex) {
+          scrollPastPanels();
+          return;
+        }
+
+        transitionToPanel(currentIndex + 1, 1);
+      },
+      onDown: () => transitionToPanel(currentIndex - 1, -1)
+    });
+  }, root);
+
+  window.addEventListener("keydown", handleKeydown);
+  window.addEventListener("scroll", handleWindowScroll, { passive: true });
+});
 
 onBeforeUnmount(() => {
-  context?.revert()
-})
+  observer?.kill();
+  context?.revert();
+  window.removeEventListener("keydown", handleKeydown);
+  window.removeEventListener("scroll", handleWindowScroll);
+  transitionToPanel = undefined;
+});
 </script>
 
 <template>
-  <section ref="root" class="relative overflow-hidden">
-    <div class="flip-stage relative h-svh min-h-[700px] overflow-hidden bg-[#08090d] [perspective:1400px] max-[620px]:min-h-[680px]">
-      <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_16%,rgba(255,79,63,0.24),transparent_30vw),radial-gradient(circle_at_82%_20%,rgba(99,215,231,0.2),transparent_28vw),linear-gradient(180deg,rgba(255,248,234,0.04),rgba(8,9,13,0))]"></div>
-      <div class="pointer-events-none absolute inset-x-8 top-24 h-px bg-white/15"></div>
+  <section ref="root" class="relative h-[100dvh] min-h-screen overflow-hidden bg-[#08090d] text-[#fff8ea]">
+    <article v-for="(panel, index) in panels" :key="panel.label" class="loop-panel invisible absolute inset-0 overflow-hidden" :aria-hidden="activeIndex !== index">
+      <div class="loop-outer absolute inset-0 overflow-hidden">
+        <div class="loop-inner absolute inset-0 overflow-hidden" :style="{ background: panel.background }">
+          <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,248,234,0.055),rgba(8,9,13,0)_34%,rgba(8,9,13,0.26)_100%)]"></div>
 
-      <article class="flip-panel visible absolute inset-0 grid transform-gpu place-items-center px-6 pb-16 pt-32 opacity-100 will-change-transform [backface-visibility:hidden] [transform-style:preserve-3d] max-[620px]:px-[18px] max-[620px]:pb-12 max-[620px]:pt-28">
-        <div class="panel-content mx-auto grid w-full max-w-[1180px] transform-gpu grid-cols-[minmax(0,1fr)_minmax(320px,0.72fr)] items-center gap-16 will-change-transform max-[920px]:grid-cols-1">
-          <div>
-            <div class="mb-7 flex flex-wrap gap-2.5 text-xs font-black text-[#fff8ea]/70">
-              <span class="rounded-full border border-white/15 bg-white/[0.06] px-3 py-2 backdrop-blur-xl">Music</span>
-              <span class="rounded-full border border-white/15 bg-white/[0.06] px-3 py-2 backdrop-blur-xl">Photos</span>
-              <span class="rounded-full border border-white/15 bg-white/[0.06] px-3 py-2 backdrop-blur-xl">Story</span>
-            </div>
-
-            <h1 class="m-0 font-serif text-[clamp(76px,12vw,170px)] font-black leading-[0.82] text-[#fff8ea]">
-              徐良
-              <span class="mt-3 block font-sans text-[clamp(34px,5vw,74px)] text-transparent [-webkit-text-stroke:1px_rgba(255,248,234,0.78)]">
-                Official
-              </span>
-            </h1>
-
-            <p class="mt-8 max-w-[660px] text-[clamp(17px,2vw,21px)] leading-[1.9] text-[#fff8ea]/70">
-              一个围绕音乐、照片集和个人故事展开的官方网站。向下滚动，像翻开一张张唱片内页一样进入不同内容。
-            </p>
-          </div>
-
-          <div class="relative min-h-[560px] max-[920px]:min-h-[430px]">
-            <div class="absolute inset-x-0 top-0 bottom-20 overflow-hidden rounded-[42%_58%_40%_60%/50%_38%_62%_50%] border border-white/15 bg-[linear-gradient(180deg,transparent_0_52%,rgba(8,9,13,0.76)_86%),radial-gradient(circle_at_50%_22%,rgba(255,248,234,0.2),transparent_35%),linear-gradient(135deg,rgba(255,79,63,0.72),rgba(99,215,231,0.35)_48%,rgba(242,184,75,0.54))] shadow-[0_34px_90px_rgba(0,0,0,0.34)]">
-              <img class="mx-auto h-full max-h-[520px] w-auto object-contain object-center opacity-95" :src="heroImg" alt="徐良视觉图" />
-            </div>
-            <div class="absolute bottom-0 left-8 right-0 rounded-lg border border-white/15 bg-white/[0.045] p-[22px] shadow-[0_34px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl max-[620px]:left-0">
-              <p class="text-xs font-black uppercase text-[#f2b84b]">Now Playing</p>
-              <h2 class="mt-2 text-xl font-black text-[#fff8ea]">青春旋律 Demo</h2>
-              <div class="mt-5 grid h-14 grid-cols-[repeat(24,minmax(0,1fr))] items-end gap-1.5" aria-hidden="true">
-                <span v-for="height in [38,66,42,82,54,92,48,74,60,34,88,46,68,52,96,40,72,58,84,44,76,50,90,62]" :key="height" class="rounded-full bg-gradient-to-b from-[#f2b84b] to-[#ff4f3f]" :style="{ height: `${height}%` }"></span>
-              </div>
-            </div>
-          </div>
+          <component :is="panel.component" />
         </div>
-      </article>
+      </div>
+    </article>
 
-      <article class="flip-panel invisible absolute inset-0 grid transform-gpu place-items-center px-6 pb-16 pt-32 opacity-0 will-change-transform [backface-visibility:hidden] [transform-style:preserve-3d] max-[620px]:px-[18px] max-[620px]:pb-12 max-[620px]:pt-28">
-        <div class="panel-content mx-auto grid w-full max-w-[1180px] transform-gpu grid-cols-[360px_minmax(0,1fr)] items-stretch gap-6 will-change-transform max-[920px]:grid-cols-1">
-          <aside class="rounded-lg border border-white/15 bg-white/[0.055] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)] backdrop-blur-2xl">
-            <div class="grid min-h-[330px] place-items-center rounded-md bg-[radial-gradient(circle_at_34%_28%,rgba(255,248,234,0.2),transparent_26%),linear-gradient(135deg,#ff4f3f,#2d1c38_48%,#63d7e7)] font-serif text-5xl font-black text-[#fff8ea] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]">
-              XL
-            </div>
-            <p class="mt-5 text-xs font-black uppercase text-[#f2b84b]">Music Library</p>
-            <h2 class="mt-2 text-2xl font-black text-[#fff8ea]">精选作品集</h2>
-          </aside>
+    <nav
+      class="absolute left-1/2 top-7 z-40 grid h-12 w-[min(1280px,calc(100%_-_64px))] -translate-x-1/2 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-8 max-[760px]:w-[calc(100%_-_32px)] max-[760px]:gap-4"
+      aria-label="首页导航"
+    >
+      <button class="group flex items-center gap-3 text-left focus-visible:outline-none" type="button" aria-label="回到首页" @click="selectPanel(0)">
+        <span class="grid size-10 place-items-center rounded-full bg-[linear-gradient(135deg,#d77475,#8b3e5a)] text-xs font-black text-white shadow-[0_12px_28px_rgba(183,72,91,0.22)]">XL</span>
+        <span class="grid gap-0.5">
+          <strong class="text-[17px] font-black leading-none tracking-wide text-[#fff8ea] transition group-hover:text-white">徐良</strong>
+          <span class="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#fff8ea]/58">Official Site</span>
+        </span>
+      </button>
 
-          <div class="grid gap-3">
-            <div class="rounded-lg border border-white/15 bg-white/[0.055] p-5 backdrop-blur-2xl transition hover:-translate-x-1 hover:border-[#f2b84b]/45">
-              <p class="text-xs font-black text-[#f2b84b]">01</p>
-              <h3 class="mt-2 text-2xl font-black text-[#fff8ea]">客官不可以</h3>
-              <p class="mt-1 text-sm text-[#fff8ea]/45">Single / Pop Memory / 03:42</p>
-            </div>
-            <div class="rounded-lg border border-white/15 bg-white/[0.055] p-5 backdrop-blur-2xl transition hover:-translate-x-1 hover:border-[#f2b84b]/45">
-              <p class="text-xs font-black text-[#f2b84b]">02</p>
-              <h3 class="mt-2 text-2xl font-black text-[#fff8ea]">犯贱</h3>
-              <p class="mt-1 text-sm text-[#fff8ea]/45">Single / Collaboration / 04:06</p>
-            </div>
-            <div class="rounded-lg border border-white/15 bg-white/[0.055] p-5 backdrop-blur-2xl transition hover:-translate-x-1 hover:border-[#f2b84b]/45">
-              <p class="text-xs font-black text-[#f2b84b]">03</p>
-              <h3 class="mt-2 text-2xl font-black text-[#fff8ea]">后会无期</h3>
-              <p class="mt-1 text-sm text-[#fff8ea]/45">Single / Acoustic / 03:58</p>
-            </div>
-          </div>
-        </div>
-      </article>
-
-      <article class="flip-panel invisible absolute inset-0 grid transform-gpu place-items-center px-6 pb-16 pt-32 opacity-0 will-change-transform [backface-visibility:hidden] [transform-style:preserve-3d] max-[620px]:px-[18px] max-[620px]:pb-12 max-[620px]:pt-28">
-        <div class="panel-content mx-auto w-full max-w-[1180px] transform-gpu will-change-transform">
-          <p class="text-xs font-black uppercase text-[#f2b84b]">Photo Archive</p>
-          <h2 class="mt-3 max-w-3xl font-serif text-[clamp(42px,7vw,92px)] font-black leading-[0.95] text-[#fff8ea]">
-            照片集要有记忆点
-          </h2>
-          <div class="mt-10 grid grid-cols-3 gap-4 max-[920px]:grid-cols-2 max-[620px]:grid-cols-1">
-            <article class="min-h-[280px] rounded-lg border border-white/15 bg-[linear-gradient(180deg,transparent_44%,rgba(8,9,13,0.82)),linear-gradient(135deg,rgba(255,79,63,0.78),rgba(99,215,231,0.46))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.24)]">
-              <p class="text-xs font-black text-[#fff8ea]/70">LIVE / 01</p>
-            </article>
-            <article class="min-h-[280px] rounded-lg border border-white/15 bg-[linear-gradient(180deg,transparent_44%,rgba(8,9,13,0.82)),linear-gradient(135deg,rgba(242,184,75,0.72),rgba(255,122,168,0.52))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.24)]">
-              <p class="text-xs font-black text-[#fff8ea]/70">BACKSTAGE / 02</p>
-            </article>
-            <article class="min-h-[280px] rounded-lg border border-white/15 bg-[linear-gradient(180deg,transparent_44%,rgba(8,9,13,0.82)),linear-gradient(135deg,rgba(99,215,231,0.68),rgba(162,214,111,0.46))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.24)]">
-              <p class="text-xs font-black text-[#fff8ea]/70">PORTRAIT / 03</p>
-            </article>
-          </div>
-        </div>
-      </article>
-
-      <article class="flip-panel invisible absolute inset-0 grid transform-gpu place-items-center px-6 pb-16 pt-32 opacity-0 will-change-transform [backface-visibility:hidden] [transform-style:preserve-3d] max-[620px]:px-[18px] max-[620px]:pb-12 max-[620px]:pt-28">
-        <div class="panel-content mx-auto grid w-full max-w-[1180px] transform-gpu grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-6 will-change-transform max-[920px]:grid-cols-1">
-          <section class="rounded-lg border border-white/15 bg-white/[0.055] p-7 backdrop-blur-2xl">
-            <p class="text-xs font-black uppercase text-[#f2b84b]">About</p>
-            <h2 class="mt-3 font-serif text-[clamp(42px,6vw,82px)] font-black leading-[0.96] text-[#fff8ea]">
-              关于徐良
-            </h2>
-            <p class="mt-5 text-base leading-8 text-[#fff8ea]/70">
-              关于页不必写成长篇百科，更适合把代表作品、创作阶段和演出节点整理成一条可阅读的故事线。
-            </p>
-          </section>
-
-          <div class="grid gap-3">
-            <article class="grid grid-cols-[110px_1fr] gap-5 rounded-lg border border-white/15 bg-white/[0.055] p-5 backdrop-blur-2xl max-[620px]:grid-cols-1">
-              <strong class="text-xl font-black text-[#f2b84b]">2010</strong>
-              <span class="leading-8 text-[#fff8ea]/70">代表作品进入大众视野，形成鲜明的网络音乐记忆点。</span>
-            </article>
-            <article class="grid grid-cols-[110px_1fr] gap-5 rounded-lg border border-white/15 bg-white/[0.055] p-5 backdrop-blur-2xl max-[620px]:grid-cols-1">
-              <strong class="text-xl font-black text-[#f2b84b]">2011-2016</strong>
-              <span class="leading-8 text-[#fff8ea]/70">作品库扩展，合作、专辑和创作风格逐渐沉稳。</span>
-            </article>
-            <article class="grid grid-cols-[110px_1fr] gap-5 rounded-lg border border-white/15 bg-white/[0.055] p-5 backdrop-blur-2xl max-[620px]:grid-cols-1">
-              <strong class="text-xl font-black text-[#f2b84b]">Now</strong>
-              <span class="leading-8 text-[#fff8ea]/70">围绕新歌、现场、影像和粉丝互动，形成更完整的个人官网内容体系。</span>
-            </article>
-          </div>
-        </div>
-      </article>
-
-      <div class="pointer-events-none fixed left-6 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center gap-2 rounded-full border border-white/15 bg-white/[0.035] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_16px_48px_rgba(0,0,0,0.28)] backdrop-blur-2xl max-[620px]:left-3">
-        <span
-          v-for="index in 4"
-          :key="index"
-          class="page-dot block h-2 w-2 rounded-full bg-gradient-to-b from-[#fff8ea] to-[#f2b84b] opacity-40 shadow-[0_0_14px_rgba(242,184,75,0.18)]"
-        ></span>
+      <div class="flex items-center justify-center gap-9 max-[760px]:hidden">
+        <button
+          v-for="item in navItems"
+          :key="item.label"
+          class="relative h-10 px-1 text-sm font-black text-[#fff8ea]/68 transition hover:text-[#fff8ea] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fff8ea]/70"
+          :class="item.panelIndex === 0 ? 'text-[#fff8ea]' : ''"
+          type="button"
+          :aria-current="item.panelIndex === 0 ? 'page' : undefined"
+          @click="selectPanel(item.panelIndex)"
+        >
+          {{ item.label }}
+          <span
+            class="absolute bottom-0 left-1/2 h-px w-5 -translate-x-1/2 bg-[#f2b84b] transition"
+            :class="item.panelIndex === 0 ? 'scale-x-100 opacity-100' : 'scale-x-0 opacity-0'"
+          ></span>
+        </button>
       </div>
 
-      <div class="pointer-events-none absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 text-xs font-black uppercase text-[#fff8ea]/45">
-        <span>Scroll</span>
-        <span class="h-px w-10 bg-[#fff8ea]/30"></span>
-        <span>Flip</span>
-      </div>
+      <button
+        class="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-white/10 bg-black/38 px-4 text-sm font-black text-[#fff8ea] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-xl transition hover:border-[#f2b84b]/46 hover:bg-black/48 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fff8ea]/70"
+        type="button"
+        @click="selectPanel(1)"
+      >
+        开始听
+        <span class="grid size-4 place-items-center rounded-full bg-[#fff8ea] text-[#111]">
+          <span class="ml-0.5 h-0 w-0 border-y-[4px] border-l-[6px] border-y-transparent border-l-current"></span>
+        </span>
+      </button>
+    </nav>
+
+    <div
+      class="absolute right-6 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-2 rounded-full border border-white/15 bg-white/[0.035] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_16px_48px_rgba(0,0,0,0.28)] backdrop-blur-2xl max-[620px]:right-3"
+    >
+      <button
+        v-for="(panel, index) in panels"
+        :key="panel.label"
+        class="h-2 w-2 rounded-full bg-[#fff8ea] opacity-45 transition-[height,opacity,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fff8ea]/70"
+        :class="activeIndex === index ? 'h-7 opacity-100' : 'hover:opacity-75'"
+        :aria-label="`切换到${panel.label}`"
+        :aria-current="activeIndex === index ? 'step' : undefined"
+        type="button"
+        @click="selectPanel(index)"
+      ></button>
     </div>
   </section>
 </template>
