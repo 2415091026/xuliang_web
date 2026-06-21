@@ -1,8 +1,8 @@
 <script setup>
-import storyBg from "../../assets/images/07.jpg";
-import image05 from "../../assets/images/05.jpg";
-import image06 from "../../assets/images/06.jpg";
-import image08 from "../../assets/images/08.jpg";
+import storyBg from "../../../assets/images/07.jpg";
+import image05 from "../../../assets/images/05.jpg";
+import image06 from "../../../assets/images/06.jpg";
+import image08 from "../../../assets/images/08.jpg";
 
 const panel = {
   eyebrow: "About",
@@ -12,7 +12,7 @@ const panel = {
   accent: "#92d85b"
 };
 
-const panelNumber = "04";
+const panelNumber = "03";
 const totalPanels = "04";
 
 const stats = [
@@ -47,12 +47,13 @@ const timelineItems = [
 <template>
   <div class="panel-content story-panel relative z-10 h-full w-full overflow-hidden will-change-transform">
     <img
-      class="pointer-events-none absolute inset-y-0 left-[22%] h-full w-[46%] object-cover object-[42%_44%] opacity-[0.38] mix-blend-luminosity brightness-[0.54] contrast-[1.18] saturate-[0.72] hue-rotate-[58deg] max-[980px]:left-0 max-[980px]:w-full max-[980px]:opacity-[0.22]"
+      class="story-bg-photo pointer-events-none absolute inset-y-0 left-[8%] h-full w-[72%] object-cover object-[45%_44%] opacity-[0.34] mix-blend-luminosity brightness-[0.54] contrast-[1.18] saturate-[0.72] hue-rotate-[58deg] max-[980px]:left-0 max-[980px]:w-full max-[980px]:opacity-[0.22]"
       :src="storyBg"
       alt=""
       aria-hidden="true"
     />
-    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_34%_22%,rgba(146,216,91,0.22),transparent_28vw),radial-gradient(circle_at_8%_72%,rgba(146,216,91,0.18),transparent_24vw),linear-gradient(90deg,rgba(4,12,14,0.94)_0%,rgba(9,17,14,0.58)_45%,rgba(4,8,10,0.92)_100%)]"></div>
+    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_34%_22%,rgba(146,216,91,0.22),transparent_28vw),radial-gradient(circle_at_8%_72%,rgba(146,216,91,0.18),transparent_24vw),linear-gradient(90deg,rgba(4,12,14,0.94)_0%,rgba(9,17,14,0.64)_40%,rgba(6,11,10,0.76)_70%,rgba(4,8,10,0.94)_100%)]"></div>
+    <div class="pointer-events-none absolute inset-y-0 left-[56%] w-[30%] bg-[linear-gradient(90deg,transparent,rgba(4,8,10,0.28)_46%,transparent)]"></div>
     <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,248,234,0.03)_0%,rgba(4,8,10,0.16)_45%,rgba(4,8,10,0.82)_100%)]"></div>
     <p class="pointer-events-none absolute left-[3%] top-[15%] select-none font-cfracelyncetta text-[clamp(108px,18vw,260px)] italic leading-none text-[#92d85b]/10 max-[760px]:hidden" aria-hidden="true">
       Xu Liang
@@ -125,3 +126,17 @@ const timelineItems = [
     </div>
   </div>
 </template>
+
+<style scoped>
+.story-bg-photo {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 72%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 72%, transparent 100%);
+}
+
+@media (max-width: 980px) {
+  .story-bg-photo {
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+  }
+}
+</style>

@@ -11,8 +11,8 @@ const service = axios.create({
 // 请求拦截器
 service.interceptors.request.use(
   (config) => {
-    // 在发送请求之前携带本地存储的 token
-    const token = localStorage.getItem('token')
+    // 在发送请求之前携带持久登录或当前会话的 token
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token')
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`
     }
@@ -39,6 +39,9 @@ service.interceptors.response.use(
       // 401 凭证过期或未登录处理
       if (res.code === 401) {
         localStorage.removeItem('token')
+        localStorage.removeItem('userInfo')
+        sessionStorage.removeItem('token')
+        sessionStorage.removeItem('userInfo')
         // 这里可以执行跳转登录页的逻辑，例如 window.location.href = '/login'
       }
       return Promise.reject(new Error(res.message || 'Error'))
@@ -60,6 +63,9 @@ service.interceptors.response.use(
         case 401:
           message = '登录凭证已过期，请重新登录'
           localStorage.removeItem('token')
+          localStorage.removeItem('userInfo')
+          sessionStorage.removeItem('token')
+          sessionStorage.removeItem('userInfo')
           break
         case 403:
           message = '拒绝访问，您没有该操作权限'

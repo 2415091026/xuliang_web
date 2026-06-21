@@ -2,14 +2,14 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { gsap } from 'gsap'
 import { Flip } from 'gsap/Flip'
-import image01 from '../../assets/images/01.jpg'
-import image02 from '../../assets/images/02.jpg'
-import image03 from '../../assets/images/03.jpg'
-import image04 from '../../assets/images/04.jpg'
-import image05 from '../../assets/images/05.jpg'
-import image06 from '../../assets/images/06.jpg'
-import image07 from '../../assets/images/07.jpg'
-import image08 from '../../assets/images/08.jpg'
+import image01 from '../../../assets/images/01.jpg'
+import image02 from '../../../assets/images/02.jpg'
+import image03 from '../../../assets/images/03.jpg'
+import image04 from '../../../assets/images/04.jpg'
+import image05 from '../../../assets/images/05.jpg'
+import image06 from '../../../assets/images/06.jpg'
+import image07 from '../../../assets/images/07.jpg'
+import image08 from '../../../assets/images/08.jpg'
 
 gsap.registerPlugin(Flip)
 
@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
           :key="photo.id"
           class="gallery__item overflow-hidden bg-black"
         >
-          <img class="h-full w-full object-cover" :src="photo.src" :alt="`照片 ${photo.id}`" decoding="async" draggable="false" />
+          <img class="h-full w-full object-cover" :src="photo.src" :alt="`照片 ${photo.id}`" loading="lazy" decoding="async" fetchpriority="low" draggable="false" />
         </div>
       </div>
     </div>

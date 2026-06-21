@@ -1,8 +1,8 @@
 <script setup>
-import heroBg from "../../assets/images/09.jpg";
-import image02 from "../../assets/images/02.jpg";
-import image03 from "../../assets/images/03.jpg";
-import image04 from "../../assets/images/04.jpg";
+import heroBg from "../../../assets/images/09.jpg";
+import image02 from "../../../assets/images/02.jpg";
+import image03 from "../../../assets/images/03.jpg";
+import image04 from "../../../assets/images/04.jpg";
 
 const panel = {
   eyebrow: "Music Library",
@@ -54,12 +54,13 @@ const tracks = [
 <template>
   <div class="panel-content tracks-panel relative z-10 h-full w-full overflow-hidden will-change-transform">
     <img
-      class="pointer-events-none absolute inset-y-0 right-0 h-full w-[59%] object-cover object-[54%_24%] opacity-[0.42] mix-blend-luminosity brightness-[0.62] contrast-[1.16] saturate-[0.72] max-[900px]:w-full max-[900px]:opacity-[0.18]"
+      class="tracks-bg-photo pointer-events-none absolute inset-y-0 right-[-5%] h-full w-[76%] object-cover object-[58%_24%] opacity-[0.4] mix-blend-luminosity brightness-[0.62] contrast-[1.16] saturate-[0.72] max-[900px]:right-0 max-[900px]:w-full max-[900px]:opacity-[0.18]"
       :src="heroBg"
       alt=""
       aria-hidden="true"
     />
-    <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(10,8,13,0.96)_0%,rgba(22,12,18,0.83)_39%,rgba(9,8,10,0.42)_69%,rgba(6,6,8,0.9)_100%)]"></div>
+    <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(10,8,13,0.96)_0%,rgba(22,12,18,0.84)_36%,rgba(10,8,11,0.56)_58%,rgba(6,6,8,0.9)_100%)]"></div>
+    <div class="pointer-events-none absolute inset-y-0 left-[36%] w-[30%] bg-[linear-gradient(90deg,transparent,rgba(10,8,13,0.24)_48%,transparent)]"></div>
     <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_77%_4%,rgba(242,184,75,0.42),transparent_25vw),radial-gradient(circle_at_9%_70%,rgba(207,42,71,0.36),transparent_23vw)]"></div>
     <div class="pointer-events-none absolute inset-x-[6%] bottom-[31%] h-24 opacity-[0.26] max-[760px]:hidden" aria-hidden="true">
       <div class="flex h-full items-center gap-1">
@@ -163,3 +164,17 @@ const tracks = [
     </div>
   </div>
 </template>
+
+<style scoped>
+.tracks-bg-photo {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 16%, #000 88%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 16%, #000 88%, transparent 100%);
+}
+
+@media (max-width: 900px) {
+  .tracks-bg-photo {
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+  }
+}
+</style>

@@ -1,4 +1,4 @@
-import request from '../utils/request'
+import request from "../utils/request";
 
 /**
  * 管理员登录接口
@@ -9,8 +9,25 @@ import request from '../utils/request'
  */
 export const loginApi = (data) => {
   return request({
-    url: '/login',
-    method: 'post',
+    url: "/admin/login",
+    method: "post",
     data
-  })
-}
+  });
+};
+
+// 获取当前登录管理员信息
+export const getInfoApi = () => {
+  return request({
+    url: "/admin/getInfo",
+    method: "get"
+  });
+};
+
+// 管理员注册接口
+export const registerApi = (data) => {
+  return request({
+    url: "/admin/register",
+    method: "post",
+    data
+  });
+};

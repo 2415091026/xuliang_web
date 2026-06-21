@@ -2,15 +2,16 @@
 import { markRaw, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { gsap } from "gsap";
 import { Observer } from "gsap/Observer";
-import HeroPanel from "../components/home/HeroPanel.vue";
-import PhotosPanel from "../components/home/PhotosPanel.vue";
-import StoryPanel from "../components/home/StoryPanel.vue";
-import TracksPanel from "../components/home/TracksPanel.vue";
+import HeroPanel from "./components/HeroPanel.vue";
+import PhotosPanel from "./components/PhotosPanel.vue";
+import StoryPanel from "./components/StoryPanel.vue";
+import TracksPanel from "./components/TracksPanel.vue";
 
 gsap.registerPlugin(Observer);
 
 const root = ref(null);
 const activeIndex = ref(0);
+const mountedPanelIndexes = ref([0]);
 
 const panels = [
   {
@@ -25,31 +26,69 @@ const panels = [
       "radial-gradient(circle at 76% 18%, rgba(242,184,75,0.42), transparent 30vw), radial-gradient(circle at 14% 78%, rgba(255,122,168,0.28), transparent 32vw), linear-gradient(135deg, #140d11 0%, #33200c 46%, #101114 100%)",
     component: markRaw(TracksPanel)
   },
+  // {
+  //   label: "关于徐良",
+  //   background:
+  //     "radial-gradient(circle at 20% 24%, rgba(162,214,111,0.34), transparent 28vw), radial-gradient(circle at 78% 20%, rgba(255,79,63,0.24), transparent 30vw), linear-gradient(135deg, #101114 0%, #172112 46%, #08090d 100%)",
+  //   component: markRaw(StoryPanel)
+  // },
   {
     label: "照片集",
     background:
       "radial-gradient(circle at 18% 20%, rgba(99,215,231,0.42), transparent 30vw), radial-gradient(circle at 86% 76%, rgba(162,214,111,0.3), transparent 32vw), linear-gradient(135deg, #07161b 0%, #132333 52%, #08090d 100%)",
     component: markRaw(PhotosPanel)
-  },
-  {
-    label: "关于徐良",
-    background:
-      "radial-gradient(circle at 20% 24%, rgba(162,214,111,0.34), transparent 28vw), radial-gradient(circle at 78% 20%, rgba(255,79,63,0.24), transparent 30vw), linear-gradient(135deg, #101114 0%, #172112 46%, #08090d 100%)",
-    component: markRaw(StoryPanel)
   }
-];
-
-const navItems = [
-  { label: "首页", panelIndex: 0 },
-  { label: "音乐", panelIndex: 1 },
-  { label: "影像", panelIndex: 2 },
-  { label: "关于", panelIndex: 3 }
 ];
 
 let context;
 let observer;
 let transitionToPanel;
 let releasedToFooter = false;
+let preloadHandle = 0;
+let preloadUsesIdleCallback = false;
+
+const isPanelMounted = (index) => mountedPanelIndexes.value.includes(index);
+
+const ensurePanelMounted = async (index) => {
+  if (index < 0 || index >= panels.length || isPanelMounted(index)) return;
+
+  mountedPanelIndexes.value = [...mountedPanelIndexes.value, index];
+  await nextTick();
+};
+
+const waitForRenderFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
+const clearPanelPreload = () => {
+  if (!preloadHandle) return;
+
+  if (preloadUsesIdleCallback && "cancelIdleCallback" in window) {
+    window.cancelIdleCallback(preloadHandle);
+  } else {
+    window.clearTimeout(preloadHandle);
+  }
+
+  preloadHandle = 0;
+};
+
+const schedulePanelPreload = (index) => {
+  if (index < 0 || index >= panels.length || isPanelMounted(index)) return;
+
+  clearPanelPreload();
+
+  const preloadPanel = () => {
+    preloadHandle = 0;
+    ensurePanelMounted(index);
+  };
+
+  if ("requestIdleCallback" in window) {
+    preloadUsesIdleCallback = true;
+    preloadHandle = window.requestIdleCallback(preloadPanel, { timeout: 900 });
+    return;
+  }
+
+  preloadUsesIdleCallback = false;
+  preloadHandle = window.setTimeout(preloadPanel, 240);
+};
 
 const getPanelTop = () => {
   if (!root.value) return 0;
@@ -119,22 +158,20 @@ onMounted(async () => {
     const panelElements = gsap.utils.toArray(".loop-panel", root.value);
     const outerWrappers = gsap.utils.toArray(".loop-outer", root.value);
     const innerWrappers = gsap.utils.toArray(".loop-inner", root.value);
-    const contents = gsap.utils.toArray(".panel-content", root.value);
-    const visuals = gsap.utils.toArray(".panel-visual", root.value);
     const wrappers = [...outerWrappers, ...innerWrappers];
     const lastIndex = panelElements.length - 1;
     let currentIndex = 0;
     let animating = false;
+    const getPanelContent = (index) => panelElements[index]?.querySelector(".panel-content") ?? null;
+    const getPanelVisual = (index) => panelElements[index]?.querySelector(".panel-visual") ?? null;
 
     gsap.set(panelElements, { autoAlpha: 0, zIndex: 0 });
     gsap.set(panelElements[0], { autoAlpha: 1, zIndex: 1 });
-    gsap.set(wrappers, { yPercent: 0 });
-    gsap.set(contents, { autoAlpha: 0, y: 48 });
-    gsap.set(visuals, { autoAlpha: 0, scale: 0.96, y: 22 });
-    gsap.set(contents[0], { autoAlpha: 1, y: 0 });
-    gsap.set(visuals[0], { autoAlpha: 1, scale: 1, y: 0 });
+    gsap.set(wrappers, { yPercent: 0, force3D: true });
+    gsap.set(getPanelContent(0), { autoAlpha: 1, y: 0 });
+    gsap.set(getPanelVisual(0), { autoAlpha: 1, scale: 1, y: 0 });
 
-    transitionToPanel = (index, direction = 1) => {
+    transitionToPanel = async (index, direction = 1) => {
       const nextIndex = gsap.utils.clamp(0, lastIndex, index);
 
       if (animating || nextIndex === currentIndex) return;
@@ -142,7 +179,13 @@ onMounted(async () => {
       releasedToFooter = false;
       lockPanelScroll();
       animating = true;
-      activeIndex.value = nextIndex;
+      await ensurePanelMounted(nextIndex);
+      await waitForRenderFrame();
+
+      if (!root.value) {
+        animating = false;
+        return;
+      }
 
       const currentPanel = panelElements[currentIndex];
       const nextPanel = panelElements[nextIndex];
@@ -150,48 +193,68 @@ onMounted(async () => {
       const currentInner = innerWrappers[currentIndex];
       const nextOuter = outerWrappers[nextIndex];
       const nextInner = innerWrappers[nextIndex];
-      const currentContent = contents[currentIndex];
-      const nextContent = contents[nextIndex];
-      const currentVisual = visuals[currentIndex];
-      const nextVisual = visuals[nextIndex];
+      const currentContent = getPanelContent(currentIndex);
+      const nextContent = getPanelContent(nextIndex);
+      const currentVisual = getPanelVisual(currentIndex);
+      const nextVisual = getPanelVisual(nextIndex);
       const currentVisualIsLight = currentVisual?.dataset.lightVisual === "true";
       const nextVisualIsLight = nextVisual?.dataset.lightVisual === "true";
       const y = direction > 0 ? 1 : -1;
+      activeIndex.value = nextIndex;
 
-      gsap
-        .timeline({
-          defaults: { duration: 1, ease: "power4.inOut" },
-          onComplete: () => {
-            gsap.set(currentPanel, { autoAlpha: 0, zIndex: 0 });
-            gsap.set(nextPanel, { zIndex: 1 });
-            currentIndex = nextIndex;
-            animating = false;
-          }
-        })
+      if (!currentPanel || !nextPanel || !currentOuter || !currentInner || !nextOuter || !nextInner) {
+        currentIndex = nextIndex;
+        animating = false;
+        return;
+      }
+
+      const timeline = gsap.timeline({
+        defaults: { duration: 0.82, ease: "power3.inOut", overwrite: "auto" },
+        onComplete: () => {
+          gsap.set(currentPanel, { autoAlpha: 0, zIndex: 0 });
+          gsap.set(nextPanel, { zIndex: 1 });
+          currentIndex = nextIndex;
+          animating = false;
+          schedulePanelPreload(currentIndex + 1);
+        }
+      });
+
+      timeline
         .set(nextPanel, { autoAlpha: 1, zIndex: 2 }, 0)
         .fromTo(nextOuter, { yPercent: 100 * y }, { yPercent: 0 }, 0)
         .fromTo(nextInner, { yPercent: -100 * y }, { yPercent: 0 }, 0)
         .to(currentOuter, { yPercent: -100 * y }, 0)
-        .to(currentInner, { yPercent: 100 * y }, 0)
-        .to(currentContent, { autoAlpha: 0, y: -72 * y, duration: 0.5, ease: "power3.in" }, 0)
-        .to(
+        .to(currentInner, { yPercent: 100 * y }, 0);
+
+      if (currentContent) {
+        timeline.to(currentContent, { autoAlpha: 0, y: -72 * y, duration: 0.42, ease: "power3.in" }, 0);
+      }
+
+      if (currentVisual) {
+        timeline.to(
           currentVisual,
           {
             autoAlpha: 0,
             scale: currentVisualIsLight ? 1 : 0.92,
             y: (currentVisualIsLight ? -14 : -34) * y,
-            duration: currentVisualIsLight ? 0.38 : 0.58,
+            duration: currentVisualIsLight ? 0.34 : 0.48,
             ease: "power3.in"
           },
           0
-        )
-        .fromTo(nextContent, { autoAlpha: 0, y: 82 * y }, { autoAlpha: 1, y: 0, duration: 0.72, ease: "power3.out" }, 0.24)
-        .fromTo(
+        );
+      }
+
+      if (nextContent) {
+        timeline.fromTo(nextContent, { autoAlpha: 0, y: 72 * y }, { autoAlpha: 1, y: 0, duration: 0.58, ease: "power3.out" }, 0.18);
+      }
+
+      if (nextVisual) {
+        timeline.fromTo(
           nextVisual,
           {
             autoAlpha: nextVisualIsLight ? 0.74 : 0.35,
-            scale: nextVisualIsLight ? 1 : 1.12,
-            y: (nextVisualIsLight ? 16 : 44) * y,
+            scale: nextVisualIsLight ? 1 : 1.08,
+            y: (nextVisualIsLight ? 16 : 38) * y,
             rotate: nextVisualIsLight ? 0 : -3 * y
           },
           {
@@ -199,11 +262,12 @@ onMounted(async () => {
             scale: 1,
             y: 0,
             rotate: 0,
-            duration: nextVisualIsLight ? 0.52 : 0.95,
+            duration: nextVisualIsLight ? 0.48 : 0.72,
             ease: "power3.out"
           },
           0.12
         );
+      }
     };
 
     observer = Observer.create({
@@ -224,11 +288,13 @@ onMounted(async () => {
     });
   }, root);
 
+  schedulePanelPreload(1);
   window.addEventListener("keydown", handleKeydown);
   window.addEventListener("scroll", handleWindowScroll, { passive: true });
 });
 
 onBeforeUnmount(() => {
+  clearPanelPreload();
   observer?.kill();
   context?.revert();
   window.removeEventListener("keydown", handleKeydown);
@@ -240,56 +306,14 @@ onBeforeUnmount(() => {
 <template>
   <section ref="root" class="relative h-[100dvh] min-h-screen overflow-hidden bg-[#08090d] text-[#fff8ea]">
     <article v-for="(panel, index) in panels" :key="panel.label" class="loop-panel invisible absolute inset-0 overflow-hidden" :aria-hidden="activeIndex !== index">
-      <div class="loop-outer absolute inset-0 overflow-hidden">
-        <div class="loop-inner absolute inset-0 overflow-hidden" :style="{ background: panel.background }">
+      <div class="loop-outer absolute inset-0 overflow-hidden will-change-transform">
+        <div class="loop-inner absolute inset-0 overflow-hidden will-change-transform" :style="{ background: panel.background }">
           <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,248,234,0.055),rgba(8,9,13,0)_34%,rgba(8,9,13,0.26)_100%)]"></div>
 
-          <component :is="panel.component" />
+          <component v-if="isPanelMounted(index)" :is="panel.component" />
         </div>
       </div>
     </article>
-
-    <nav
-      class="absolute left-1/2 top-7 z-40 grid h-12 w-[min(1280px,calc(100%_-_64px))] -translate-x-1/2 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-8 max-[760px]:w-[calc(100%_-_32px)] max-[760px]:gap-4"
-      aria-label="首页导航"
-    >
-      <button class="group flex items-center gap-3 text-left focus-visible:outline-none" type="button" aria-label="回到首页" @click="selectPanel(0)">
-        <span class="grid size-10 place-items-center rounded-full bg-[linear-gradient(135deg,#d77475,#8b3e5a)] text-xs font-black text-white shadow-[0_12px_28px_rgba(183,72,91,0.22)]">XL</span>
-        <span class="grid gap-0.5">
-          <strong class="text-[17px] font-black leading-none tracking-wide text-[#fff8ea] transition group-hover:text-white">徐良</strong>
-          <span class="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#fff8ea]/58">Official Site</span>
-        </span>
-      </button>
-
-      <div class="flex items-center justify-center gap-9 max-[760px]:hidden">
-        <button
-          v-for="item in navItems"
-          :key="item.label"
-          class="relative h-10 px-1 text-sm font-black text-[#fff8ea]/68 transition hover:text-[#fff8ea] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fff8ea]/70"
-          :class="item.panelIndex === 0 ? 'text-[#fff8ea]' : ''"
-          type="button"
-          :aria-current="item.panelIndex === 0 ? 'page' : undefined"
-          @click="selectPanel(item.panelIndex)"
-        >
-          {{ item.label }}
-          <span
-            class="absolute bottom-0 left-1/2 h-px w-5 -translate-x-1/2 bg-[#f2b84b] transition"
-            :class="item.panelIndex === 0 ? 'scale-x-100 opacity-100' : 'scale-x-0 opacity-0'"
-          ></span>
-        </button>
-      </div>
-
-      <button
-        class="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-white/10 bg-black/38 px-4 text-sm font-black text-[#fff8ea] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_28px_rgba(0,0,0,0.22)] backdrop-blur-xl transition hover:border-[#f2b84b]/46 hover:bg-black/48 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fff8ea]/70"
-        type="button"
-        @click="selectPanel(1)"
-      >
-        开始听
-        <span class="grid size-4 place-items-center rounded-full bg-[#fff8ea] text-[#111]">
-          <span class="ml-0.5 h-0 w-0 border-y-[4px] border-l-[6px] border-y-transparent border-l-current"></span>
-        </span>
-      </button>
-    </nav>
 
     <div
       class="absolute right-6 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-2 rounded-full border border-white/15 bg-white/[0.035] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_16px_48px_rgba(0,0,0,0.28)] backdrop-blur-2xl max-[620px]:right-3"
