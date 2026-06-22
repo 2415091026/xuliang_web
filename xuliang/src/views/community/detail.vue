@@ -18,7 +18,8 @@ import {
   createCommentApi,
   togglePostLikeApi,
   togglePostCollectApi,
-  toggleCommentLikeApi
+  toggleCommentLikeApi,
+  reportPostApi
 } from "../../api/community";
 
 const route = useRoute();
@@ -357,6 +358,73 @@ const flattenComments = (comment, list = []) => {
   return list;
 };
 
+// ==================== 帖子举报相关逻辑 ====================
+const reportDialogVisible = ref(false);
+const reportLoading = ref(false);
+const reportForm = ref({
+  reason: "",
+  content: ""
+});
+
+const reportReasons = [
+  "垃圾广告/内容引流",
+  "色情低俗/不雅言论",
+  "政治敏感/违法违规",
+  "人身攻击/辱骂谩骂",
+  "侵权行为(抄袭、冒用等)",
+  "其他原因"
+];
+
+// 打开举报弹窗并校验登录
+const openReportDialog = () => {
+  const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+  if (!token) {
+    ElMessage.warning("请先登录账号再进行举报操作");
+    router.push({ name: "login" });
+    return;
+  }
+  
+  reportForm.value = {
+    reason: "",
+    content: ""
+  };
+  reportDialogVisible.value = true;
+};
+
+// 提交帖子举报到后端
+const submitReport = () => {
+  if (!reportForm.value.reason) {
+    ElMessage.warning("请选择举报原因");
+    return;
+  }
+  
+  reportLoading.value = true;
+  reportPostApi({
+    postId: Number(postId),
+    reason: reportForm.value.reason,
+    content: reportForm.value.content
+  })
+    .then(() => {
+      ElMessage.success("举报成功，我们将尽快处理您的反馈！");
+      // 在 localStorage 中缓存当前用户举报的 postId
+      const userId = userInfo.value?.userId || "guest";
+      const reportedKey = `reported_posts_${userId}`;
+      const reportedList = JSON.parse(localStorage.getItem(reportedKey) || "[]");
+      if (!reportedList.includes(Number(postId))) {
+        reportedList.push(Number(postId));
+        localStorage.setItem(reportedKey, JSON.stringify(reportedList));
+      }
+      reportDialogVisible.value = false;
+    })
+    .catch((err) => {
+      console.error("举报帖子失败：", err);
+    })
+    .finally(() => {
+      reportLoading.value = false;
+    });
+};
+
+
 onMounted(() => {
   checkLoginStatus();
   fetchPostDetail();
@@ -380,10 +448,11 @@ onMounted(() => {
         <el-button circle
           class="!w-8 !h-8 !flex !items-center !justify-center !rounded-full !border-white/5 !bg-white/[0.02] !text-white/40 hover:!bg-white/10 hover:!text-white"
           :icon="More" />
+
         <template #dropdown>
           <el-dropdown-menu class="dark-dropdown-menu">
             <el-dropdown-item>分享帖子</el-dropdown-item>
-            <el-dropdown-item class="!text-[#ff4f63]">举报内容</el-dropdown-item>
+            <el-dropdown-item class="!text-[#ff4f63]" @click="openReportDialog">举报内容</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -753,6 +822,57 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- 举报帖子弹窗 (暗黑毛玻璃主题) -->
+    <el-dialog
+      v-model="reportDialogVisible"
+      title="举报帖子"
+      width="460px"
+      class="custom-dark-dialog"
+      :align-center="true"
+    >
+      <el-form :model="reportForm" label-position="top">
+        <el-form-item label="请选择举报原因" required>
+          <el-radio-group v-model="reportForm.reason" class="flex flex-col items-start gap-2.5">
+            <el-radio
+              v-for="item in reportReasons"
+              :key="item"
+              :value="item"
+            >
+              {{ item }}
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="补充描述 (选填)">
+          <el-input
+            v-model="reportForm.content"
+            type="textarea"
+            :rows="3"
+            placeholder="请提供更多详细线索，方便我们快速进行审核和处理..."
+            maxlength="200"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="flex justify-end gap-3 mt-4">
+          <el-button
+            class="!border-white/10 !bg-transparent hover:!bg-white/5 !text-white/70 hover:!text-white !rounded-xl"
+            @click="reportDialogVisible = false"
+          >
+            取消
+          </el-button>
+          <el-button
+            type="primary"
+            class="!border-none !bg-[#f2b84b] hover:!bg-[#e0a63b] !text-black !font-bold !rounded-xl"
+            :loading="reportLoading"
+            @click="submitReport"
+          >
+            提交举报
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -813,5 +933,103 @@ button {
 :deep(.el-empty__description p) {
   color: rgba(255, 255, 255, 0.3) !important;
   font-size: 12px !important;
+}
+
+/* ==========================================================================
+   举报帖子对话框暗黑毛玻璃美化
+   ========================================================================== */
+:deep(.custom-dark-dialog) {
+  background-color: rgba(16, 17, 22, 0.88) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6) !important;
+}
+
+:deep(.custom-dark-dialog .el-dialog__title) {
+  color: #fff8ea !important;
+  font-weight: 900 !important;
+  font-size: 1.125rem !important;
+}
+
+:deep(.custom-dark-dialog .el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.4) !important;
+  transition: color 0.2s ease !important;
+}
+
+:deep(.custom-dark-dialog .el-dialog__headerbtn:hover .el-dialog__close) {
+  color: #f2b84b !important;
+}
+
+:deep(.custom-dark-dialog .el-dialog__body) {
+  color: #fff8ea !important;
+  padding: 10px 24px 20px 24px !important;
+}
+
+:deep(.custom-dark-dialog .el-form-item__label) {
+  color: rgba(255, 255, 255, 0.6) !important;
+  font-weight: 700 !important;
+  font-size: 0.875rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+:deep(.custom-dark-dialog .el-radio-group) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  width: 100% !important;
+}
+
+:deep(.custom-dark-dialog .el-radio) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  width: 100% !important;
+  margin-right: 0 !important;
+  padding: 4px 0 !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* 未选中时的圆圈样式（防止变成刺眼的白色实心圆圈） */
+:deep(.custom-dark-dialog .el-radio__inner) {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  width: 14px !important;
+  height: 14px !important;
+  transition: all 0.2s ease !important;
+}
+
+:deep(.custom-dark-dialog .el-radio:hover .el-radio__inner) {
+  border-color: rgba(242, 184, 75, 0.6) !important;
+}
+
+:deep(.custom-dark-dialog .el-radio__input.is-checked .el-radio__inner) {
+  border-color: #f2b84b !important;
+  background-color: #f2b84b !important;
+}
+
+:deep(.custom-dark-dialog .el-radio__input.is-checked + .el-radio__label) {
+  color: #f2b84b !important;
+  font-weight: 700 !important;
+}
+
+:deep(.custom-dark-dialog .el-textarea__inner) {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+  border-radius: 10px !important;
+  padding: 10px 12px !important;
+  font-size: 0.8125rem !important;
+}
+
+:deep(.custom-dark-dialog .el-textarea__inner:focus) {
+  border-color: rgba(242, 184, 75, 0.4) !important;
+  box-shadow: none !important;
+}
+
+:deep(.custom-dark-dialog .el-input__count) {
+  background-color: transparent !important;
+  color: rgba(255, 255, 255, 0.3) !important;
 }
 </style>

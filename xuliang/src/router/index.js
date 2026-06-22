@@ -65,6 +65,48 @@ const routes = [
         meta: { title: "关于" },
         component: () => import("../views/about/index.vue"),
       },
+      {
+        path: "user-center",
+        component: () => import("../views/user/index.vue"),
+        children: [
+          {
+            path: "",
+            name: "user-center",
+            meta: { title: "个人中心 - 我的主页" },
+            component: () => import("../views/user/home.vue"),
+          },
+          {
+            path: "posts",
+            name: "user-center-posts",
+            meta: { title: "个人中心 - 我的帖子" },
+            component: () => import("../views/user/posts.vue"),
+          },
+          {
+            path: "replies",
+            name: "user-center-replies",
+            meta: { title: "个人中心 - 我的回复" },
+            component: () => import("../views/user/replies.vue"),
+          },
+          {
+            path: "collects",
+            name: "user-center-collects",
+            meta: { title: "个人中心 - 我的收藏" },
+            component: () => import("../views/user/collects.vue"),
+          },
+          {
+            path: "messages",
+            name: "user-center-messages",
+            meta: { title: "个人中心 - 消息中心" },
+            component: () => import("../views/user/messages.vue"),
+          },
+          {
+            path: "settings",
+            name: "user-center-settings",
+            meta: { title: "个人中心 - 系统设置" },
+            component: () => import("../views/user/settings.vue"),
+          },
+        ]
+      },
     ],
   },
   {
