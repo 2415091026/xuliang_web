@@ -5,6 +5,7 @@ import { ElMessage } from "element-plus";
 import { getInfoApi, loginApi, registerApi } from "../../api/login";
 import { useRouter } from "vue-router";
 import heroBg from "../../assets/images/09.jpg";
+import { initSocket } from "../../utils/socket";
 
 const router = useRouter();
 
@@ -77,6 +78,8 @@ const handleLogin = async () => {
       const infoRes = await getInfoApi();
       const userInfo = infoRes.user || infoRes;
       saveLoginState(token, userInfo);
+      // 登录成功建立 WebSocket 连接
+      initSocket(token);
       router.push("/");
       console.log("获取个人信息成功，响应数据为：", infoRes);
     }

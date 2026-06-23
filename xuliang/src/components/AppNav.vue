@@ -2,6 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
+import { initSocket, disconnectSocket } from "../utils/socket";
 
 const route = useRoute();
 const router = useRouter();
@@ -25,6 +26,8 @@ const checkLoginStatus = () => {
   if (token && infoStr) {
     try {
       userInfo.value = JSON.parse(infoStr);
+      // 有效登录状态下，初始化或自动恢复 WebSocket 连接
+      initSocket(token);
     } catch (e) {
       userInfo.value = null;
     }
@@ -40,6 +43,8 @@ const handleLogout = () => {
   sessionStorage.removeItem("token");
   sessionStorage.removeItem("userInfo");
   userInfo.value = null;
+  // 退出登录时，主动断开 WebSocket 连接
+  disconnectSocket();
   ElMessage.success("已成功退出登录");
   router.push({ name: "home" });
 };
