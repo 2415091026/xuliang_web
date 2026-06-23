@@ -3,6 +3,9 @@ import { io } from "socket.io-client";
 // 全局唯一的 Socket 实例
 let socket = null;
 
+// 全局记录活跃的事件监听器，用于 socket 实例重建时自动重新绑定并消除加载时序竞态
+const activeListeners = [];
+
 /**
  * 初始化 WebSocket 连接
  * @param {string} token 用户的登录凭证 JWT Token
@@ -42,6 +45,11 @@ export const initSocket = (token) => {
     timeout: 10000                      // 握手超时时间
   });
 
+  // 绑定所有已记录的活跃监听器
+  activeListeners.forEach(({ event, callback }) => {
+    socket.on(event, callback);
+  });
+
   // 全局默认事件监听与调试日志
   socket.on("connect", () => {
     console.log(`[WebSocket] 建立连接成功，连接 ID: ${socket.id}`);
@@ -59,7 +67,7 @@ export const initSocket = (token) => {
 };
 
 /**
- * 获取当前全局的 Socket 实例
+ * 获取当前全局 of Socket 实例
  * @returns {Socket|null}
  */
 export const getSocket = () => {
@@ -83,10 +91,12 @@ export const disconnectSocket = () => {
  * @param {Function} callback 回调处理函数
  */
 export const on = (event, callback) => {
+  const exists = activeListeners.some(item => item.event === event && item.callback === callback);
+  if (!exists) {
+    activeListeners.push({ event, callback });
+  }
   if (socket) {
     socket.on(event, callback);
-  } else {
-    console.warn(`[WebSocket] 未连接，无法添加事件监听: "${event}"`);
   }
 };
 
@@ -96,6 +106,10 @@ export const on = (event, callback) => {
  * @param {Function} callback 回调处理函数
  */
 export const off = (event, callback) => {
+  const idx = activeListeners.findIndex(item => item.event === event && item.callback === callback);
+  if (idx !== -1) {
+    activeListeners.splice(idx, 1);
+  }
   if (socket) {
     socket.off(event, callback);
   }

@@ -2,7 +2,8 @@
 import { ref, onMounted, computed } from "vue";
 import { useRouter } from "vue-router";
 import { View, ChatDotRound, Setting, StarFilled, Calendar, ArrowRight, CirclePlus } from "@element-plus/icons-vue";
-import { getPostListApi } from "../../api/community";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { getPostListApi, deletePostApi, appealPostApi } from "../../api/community";
 
 const router = useRouter();
 const myPosts = ref([]);
@@ -22,8 +23,20 @@ const postStats = computed(() => {
   );
 });
 
-const toPostDetail = (id) => {
-  router.push({ name: "community-detail", params: { id: String(id) } });
+const toPostDetail = (item) => {
+  if (item.auditStatus === "1") {
+    ElMessage.warning("该帖子已违规下架，暂无法查看。您可以发起申诉。");
+    return;
+  }
+  if (item.auditStatus === "2") {
+    ElMessage.warning("该帖子正在申诉复核中，暂无法查看。");
+    return;
+  }
+  if (item.auditStatus === "3") {
+    ElMessage.warning("该帖子已永久下架，无法查看。");
+    return;
+  }
+  router.push({ name: "community-detail", params: { id: String(item.postId) } });
 };
 
 const getPostThumbStyle = (post) => {
@@ -48,7 +61,8 @@ const formatCount = (count) => {
   return count;
 };
 
-onMounted(async () => {
+// 获取我的帖子列表数据
+const fetchMyPosts = async () => {
   const infoStr = localStorage.getItem("userInfo") || sessionStorage.getItem("userInfo");
   if (infoStr) {
     try {
@@ -63,11 +77,87 @@ onMounted(async () => {
         myPosts.value = postRes.data.list || [];
       }
     } catch (e) {
-      console.error(e);
+      console.error("加载帖子列表失败：", e);
     } finally {
       loading.value = false;
     }
   }
+};
+
+// 触发下拉菜单的操作回调
+const handleCommand = (command, postId) => {
+  if (command === "appeal") {
+    appealForm.value.postId = postId;
+    appealDialogVisible.value = true;
+  } else if (command === "delete") {
+    ElMessageBox.confirm(
+      "确定要永久删除这篇帖子吗？此操作将无法撤回。",
+      "删除确认",
+      {
+        confirmButtonText: "确定删除",
+        cancelButtonText: "取消",
+        type: "warning",
+        buttonSize: "small"
+      }
+    )
+      .then(async () => {
+        try {
+          loading.value = true;
+          const res = await deletePostApi(postId);
+          if (res && res.code === 200) {
+            ElMessage.success("帖子删除成功！");
+            await fetchMyPosts(); // 重新加载数据刷新列表
+          }
+        } catch (e) {
+          console.error("删除帖子失败：", e);
+        } finally {
+          loading.value = false;
+        }
+      })
+      .catch(() => {});
+  }
+};
+
+const appealDialogVisible = ref(false);
+const appealLoading = ref(false);
+const appealForm = ref({
+  postId: null,
+  appealReason: ""
+});
+
+const handleCloseAppeal = () => {
+  appealDialogVisible.value = false;
+  appealForm.value.postId = null;
+  appealForm.value.appealReason = "";
+};
+
+const submitAppeal = async () => {
+  if (!appealForm.value.appealReason.trim()) {
+    ElMessage.warning("请输入申诉原因");
+    return;
+  }
+  try {
+    appealLoading.value = true;
+    const res = await appealPostApi({
+      postId: appealForm.value.postId,
+      appealReason: appealForm.value.appealReason
+    });
+    if (res && res.code === 200) {
+      ElMessage.success("申诉提交成功，请等待管理员复核");
+      handleCloseAppeal();
+      await fetchMyPosts();
+    } else {
+      ElMessage.error(res.message || "申诉提交失败");
+    }
+  } catch (e) {
+    console.error("提交申诉失败：", e);
+  } finally {
+    appealLoading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchMyPosts();
 });
 </script>
 
@@ -88,12 +178,20 @@ onMounted(async () => {
         </div>
         <el-button class="publish-shortcut-btn" @click="router.push({ name: 'community' })">
           发布新帖
-          <el-icon><CirclePlus /></el-icon>
+          <el-icon>
+            <CirclePlus />
+          </el-icon>
         </el-button>
       </div>
 
       <div class="post-cards-stack">
-        <div v-for="item in myPosts" :key="item.postId" class="post-list-itemgroup" @click="toPostDetail(item.postId)">
+        <div
+          v-for="item in myPosts"
+          :key="item.postId"
+          class="post-list-itemgroup"
+          :class="{ 'post-item-disabled': item.auditStatus && item.auditStatus !== '0' }"
+          @click="toPostDetail(item)"
+        >
           <div class="post-thumb-placeholder" :style="getPostThumbStyle(item)">
             <span class="music-note-icon">♪</span>
           </div>
@@ -102,23 +200,32 @@ onMounted(async () => {
             <div class="post-title-row">
               <el-tag v-if="item.isTop === '1'" size="small" class="tag-top">置顶</el-tag>
               <el-tag v-if="item.isEssence === '1'" size="small" class="tag-essence">精华</el-tag>
+              <el-tag v-if="item.auditStatus === '1'" size="small" class="tag-status-violation">违规下架</el-tag>
+              <el-tag v-if="item.auditStatus === '2'" size="small" class="tag-status-appealing">申诉中</el-tag>
+              <el-tag v-if="item.auditStatus === '3'" size="small" class="tag-status-rejected">已驳回</el-tag>
               <h4 class="post-title-text">{{ item.title || "未命名帖子" }}</h4>
             </div>
 
-            <p class="post-summary-text">{{ item.content || "暂无正文内容" }}</p>
+            <p class="post-summary-text" v-html="item.content"></p>
 
             <div class="post-meta-bottom-row">
               <span class="post-time-stamp">
-                <el-icon><Calendar /></el-icon>
+                <el-icon>
+                  <Calendar />
+                </el-icon>
                 {{ item.createTime }}
               </span>
               <div class="post-stats-indicators">
                 <span class="indicator-item">
-                  <el-icon class="indicator-icon"><View /></el-icon>
+                  <el-icon class="indicator-icon">
+                    <View />
+                  </el-icon>
                   {{ formatCount(item.viewCount) }}
                 </span>
                 <span class="indicator-item">
-                  <el-icon class="indicator-icon"><ChatDotRound /></el-icon>
+                  <el-icon class="indicator-icon">
+                    <ChatDotRound />
+                  </el-icon>
                   {{ formatCount(item.replyCount || 0) }}
                 </span>
               </div>
@@ -126,19 +233,35 @@ onMounted(async () => {
           </div>
 
           <div class="post-actions">
-            <button class="icon-action-btn" type="button" aria-label="帖子操作" @click.stop>
-              <el-icon><Setting /></el-icon>
-            </button>
+            <!-- 帖子操作下拉菜单 -->
+            <el-dropdown trigger="click" @command="(cmd) => handleCommand(cmd, item.postId)">
+              <button class="icon-action-btn" type="button" aria-label="帖子操作" @click.stop>
+                <el-icon>
+                  <Setting />
+                </el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu class="dark-dropdown-menu">
+                  <el-dropdown-item v-if="item.auditStatus === '1'" command="appeal" class="!text-[#f2b84b] font-bold">申请申诉</el-dropdown-item>
+                  <el-dropdown-item command="delete" class="!text-[#ff4f63] font-bold">删除帖子</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+
             <el-icon v-if="item.isTop === '1' || item.isEssence === '1'" class="featured-icon">
               <StarFilled />
             </el-icon>
-            <el-icon class="enter-icon"><ArrowRight /></el-icon>
+            <el-icon class="enter-icon">
+              <ArrowRight />
+            </el-icon>
           </div>
         </div>
 
         <div v-if="myPosts.length === 0" class="empty-placeholder-text">
           <div class="empty-icon">
-            <el-icon><CirclePlus /></el-icon>
+            <el-icon>
+              <CirclePlus />
+            </el-icon>
           </div>
           <h4>还没有发布过帖子</h4>
           <p>去社区分享一段音乐故事、现场回忆或者创作想法。</p>
@@ -146,6 +269,37 @@ onMounted(async () => {
         </div>
       </div>
     </section>
+
+    <!-- 发起申诉对话框 -->
+    <el-dialog
+      v-model="appealDialogVisible"
+      title="发起帖子申诉"
+      width="460px"
+      :before-close="handleCloseAppeal"
+      class="dark-appeal-dialog"
+      :append-to-body="true"
+    >
+      <div class="dialog-body-content">
+        <p class="appeal-guide-text">
+          您的帖子已被下架。如果您认为此处理存在误判，请在此填写申诉理由并提交，管理员将尽快复核。
+        </p>
+        <el-input
+          v-model="appealForm.appealReason"
+          type="textarea"
+          :rows="5"
+          placeholder="请详细填写申诉理由（限 500 字）..."
+          maxlength="500"
+          show-word-limit
+          class="dark-appeal-textarea"
+        />
+      </div>
+      <template #footer>
+        <div class="dialog-footer-actions">
+          <el-button class="cancel-dialog-btn" @click="handleCloseAppeal">取消</el-button>
+          <el-button class="submit-dialog-btn" :loading="appealLoading" @click="submitAppeal">确认提交</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -371,11 +525,40 @@ onMounted(async () => {
   font-size: 12.5px;
   color: rgba(255, 255, 255, 0.46);
   margin: 0;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
   line-height: 1.55;
+  max-height: 180px; /* 限制总高度，防止用户发表过多内容时撑坏卡片 */
+  overflow: hidden;
+  display: block;
+}
+
+/* 允许富文本段落留有微小间距 */
+.post-summary-text :deep(p) {
+  margin: 4px 0;
+}
+
+/* 限制富文本图片为精美的缩略图，避免巨图撑爆卡片 */
+.post-summary-text :deep(img) {
+  max-width: 180px;
+  max-height: 120px;
+  width: auto;
+  height: auto;
+  object-fit: cover;
+  border-radius: 8px;
+  margin: 6px 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: block;
+}
+
+/* 限制富视频大小 */
+.post-summary-text :deep(video) {
+  max-width: 220px;
+  max-height: 130px;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  margin: 6px 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: block;
 }
 
 .post-meta-bottom-row {
@@ -513,6 +696,7 @@ onMounted(async () => {
 }
 
 @media (max-width: 900px) {
+
   .posts-overview-panel,
   .list-toolbar {
     align-items: stretch;
@@ -530,6 +714,7 @@ onMounted(async () => {
 }
 
 @media (max-width: 640px) {
+
   .posts-overview-panel,
   .posts-list-panel {
     padding: 18px;
@@ -560,5 +745,163 @@ onMounted(async () => {
     flex-direction: column;
     gap: 10px;
   }
+}
+
+/* 暗黑主题下拉菜单背景与字体微调 */
+:deep(.dark-dropdown-menu) {
+  background-color: #1a1b20 !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+:deep(.dark-dropdown-menu .el-dropdown-menu__item) {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+:deep(.dark-dropdown-menu .el-dropdown-menu__item:hover) {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: #fff !important;
+}
+
+/* 状态标签样式 */
+.tag-status-violation {
+  background-color: rgba(255, 79, 99, 0.15) !important;
+  border: 1px solid rgba(255, 79, 99, 0.25) !important;
+  color: #ff4f63 !important;
+  font-weight: 900 !important;
+  font-size: 10px !important;
+}
+
+.tag-status-appealing {
+  background-color: rgba(242, 184, 75, 0.15) !important;
+  border: 1px solid rgba(242, 184, 75, 0.25) !important;
+  color: #f2b84b !important;
+  font-weight: 900 !important;
+  font-size: 10px !important;
+}
+
+.tag-status-rejected {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-weight: 900 !important;
+  font-size: 10px !important;
+}
+
+/* 卡片禁用/下架态样式微调 */
+.post-item-disabled {
+  opacity: 0.68;
+}
+
+.post-list-itemgroup.post-item-disabled:hover {
+  border-color: rgba(255, 255, 255, 0.055) !important;
+  background-color: rgba(11, 12, 17, 0.62) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025) !important;
+  transform: none !important;
+}
+
+.post-list-itemgroup.post-item-disabled:hover .post-title-text {
+  color: #fff !important;
+}
+
+.post-list-itemgroup.post-item-disabled:hover .enter-icon {
+  transform: none !important;
+  color: rgba(255, 255, 255, 0.28) !important;
+}
+
+/* 对话框整体磨砂玻璃暗黑风格（使用 :global 以挂载至 body 的 dialog） */
+:global(.dark-appeal-dialog) {
+  background: rgba(22, 23, 29, 0.92) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+:global(.dark-appeal-dialog .el-dialog__title) {
+  color: #fff8ea !important;
+  font-weight: 900 !important;
+  font-size: 16px !important;
+}
+
+:global(.dark-appeal-dialog .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+:global(.dark-appeal-dialog .el-dialog__headerbtn:hover .el-dialog__close) {
+  color: #f2b84b !important;
+}
+
+:global(.dark-appeal-dialog .el-dialog__body) {
+  padding: 20px 24px !important;
+}
+
+:global(.dark-appeal-dialog .appeal-guide-text) {
+  margin: 0 0 16px 0;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.6;
+}
+
+:global(.dark-appeal-dialog .dark-appeal-textarea .el-textarea__inner) {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 12px !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  padding: 10px 12px !important;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease !important;
+}
+
+:global(.dark-appeal-dialog .dark-appeal-textarea .el-textarea__inner:focus) {
+  border-color: rgba(242, 184, 75, 0.5) !important;
+  box-shadow: 0 0 10px rgba(242, 184, 75, 0.15) !important;
+}
+
+:global(.dark-appeal-dialog .dark-appeal-textarea .el-input__count) {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.3) !important;
+  bottom: 8px !important;
+  right: 12px !important;
+}
+
+:global(.dark-appeal-dialog .el-dialog__footer) {
+  border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+  padding: 14px 24px !important;
+}
+
+:global(.dark-appeal-dialog .dialog-footer-actions) {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+:global(.dark-appeal-dialog .cancel-dialog-btn) {
+  background: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  transition: all 0.2s ease !important;
+}
+
+:global(.dark-appeal-dialog .cancel-dialog-btn:hover) {
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  color: #fff !important;
+}
+
+:global(.dark-appeal-dialog .submit-dialog-btn) {
+  background: linear-gradient(90deg, #d77475 0%, #f2b84b 100%) !important;
+  border: none !important;
+  color: #fff !important;
+  border-radius: 8px !important;
+  font-weight: 900 !important;
+  box-shadow: 0 6px 15px rgba(215, 116, 117, 0.15) !important;
+  transition: all 0.2s ease !important;
+}
+
+:global(.dark-appeal-dialog .submit-dialog-btn:hover) {
+  box-shadow: 0 8px 20px rgba(215, 116, 117, 0.25) !important;
+  transform: translateY(-1px);
 }
 </style>

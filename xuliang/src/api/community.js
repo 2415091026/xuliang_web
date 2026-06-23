@@ -154,4 +154,32 @@ export const getMyCollectedPostsApi = () => {
   });
 };
 
+/**
+ * 删除我的帖子
+ * @param {number|string} postId 帖子ID（或逗号分隔的多个ID）
+ * @returns {Promise} axios 请求的 Promise 对象
+ */
+export const deletePostApi = (postId) => {
+  return request({
+    url: `/admin/forum/post/${postId}`,
+    method: "delete",
+  });
+};
+
+/**
+ * 申诉帖子
+ * @param {Object} data 申诉数据
+ * @param {number|string} data.postId 帖子ID
+ * @param {string} data.appealReason 申诉原因
+ * @returns {Promise} axios 请求的 Promise 对象
+ */
+export const appealPostApi = (data) => {
+  return request({
+    url: "/admin/forum/post/appeal",
+    method: "post",
+    data,
+  });
+};
+
+
 

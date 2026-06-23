@@ -2,9 +2,10 @@
 import { ref, onMounted, computed } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
-import { 
+import {
   Setting,
   ArrowRight,
+  ArrowLeft,
   Edit,
   CirclePlus,
   ChatDotRound,
@@ -16,6 +17,8 @@ import {
   Calendar
 } from "@element-plus/icons-vue";
 import { getPostListApi, getMyCollectedPostsApi } from "../../api/community";
+import { getInfoApi } from "../../api/login";
+import { getSignStatusApi, doSignApi } from "../../api/sign";
 
 const router = useRouter();
 
@@ -26,18 +29,56 @@ const myCollects = ref([]);
 const recentVisitors = ref([]); // 真实邻居用户抽样
 const loading = ref(false);
 
+// 签到状态变量
+const signStatus = ref({
+  consecutiveDays: 0,
+  totalDays: 0,
+  lastSignTime: null,
+  todaySigned: false,
+  history: []
+});
+const signLoading = ref(false);
+const currentDate = ref(new Date());
+
+const calendarRef = ref(null);
+
+const handlePrevMonth = () => {
+  if (calendarRef.value) {
+    calendarRef.value.selectDate("prev-month");
+  }
+};
+
+const handleNextMonth = () => {
+  if (calendarRef.value) {
+    calendarRef.value.selectDate("next-month");
+  }
+};
+
+const handleToday = () => {
+  if (calendarRef.value) {
+    calendarRef.value.selectDate("today");
+  }
+};
+
+const formatCurrentMonth = computed(() => {
+  if (!currentDate.value) return "";
+  const y = currentDate.value.getFullYear();
+  const m = String(currentDate.value.getMonth() + 1).padStart(2, '0');
+  return `${y}年${m}月`;
+});
+
 // 统计数据
 const stats = computed(() => {
   const postCount = myPosts.value.length;
   const collectCount = myCollects.value.length;
-  
+
   let totalViews = 0;
   let totalLikes = 0;
   myPosts.value.forEach(p => {
     totalViews += (p.viewCount || 0);
     totalLikes += (p.likeCount || 0);
   });
-  
+
   return {
     posts: postCount,
     collects: collectCount,
@@ -48,24 +89,56 @@ const stats = computed(() => {
   };
 });
 
-// 计算等级与经验值 (1个帖子=50经验，1个获赞=20经验)
+// 后端 1-18级 经验阶梯映射配置表
+const LEVEL_RULES = [
+  { level: 1, requiredCumulativeExp: 0, intervalExp: 100 },
+  { level: 2, requiredCumulativeExp: 100, intervalExp: 200 },
+  { level: 3, requiredCumulativeExp: 300, intervalExp: 500 },
+  { level: 4, requiredCumulativeExp: 800, intervalExp: 1000 },
+  { level: 5, requiredCumulativeExp: 1800, intervalExp: 1800 },
+  { level: 6, requiredCumulativeExp: 3600, intervalExp: 3000 },
+  { level: 7, requiredCumulativeExp: 6600, intervalExp: 5000 },
+  { level: 8, requiredCumulativeExp: 11600, intervalExp: 8000 },
+  { level: 9, requiredCumulativeExp: 19600, intervalExp: 12000 },
+  { level: 10, requiredCumulativeExp: 31600, intervalExp: 18000 },
+  { level: 11, requiredCumulativeExp: 49600, intervalExp: 25000 },
+  { level: 12, requiredCumulativeExp: 74600, intervalExp: 35000 },
+  { level: 13, requiredCumulativeExp: 109600, intervalExp: 50000 },
+  { level: 14, requiredCumulativeExp: 159600, intervalExp: 70000 },
+  { level: 15, requiredCumulativeExp: 229600, intervalExp: 100000 },
+  { level: 16, requiredCumulativeExp: 329600, intervalExp: 150000 },
+  { level: 17, requiredCumulativeExp: 479600, intervalExp: 220400 },
+  { level: 18, requiredCumulativeExp: 700000, intervalExp: 0 }
+];
+
+// 计算等级与经验值进度 (完美对接后端等级经验值体系)
 const levelData = computed(() => {
-  const totalExp = (stats.value.posts * 50) + (stats.value.likes * 20);
-  let level = 1;
-  let currentLevelExp = totalExp;
-  let nextLevelNeed = 100;
-  
-  while (currentLevelExp >= nextLevelNeed) {
-    currentLevelExp -= nextLevelNeed;
-    level++;
-    nextLevelNeed = 100 + (level * 80);
+  if (!userInfo.value) {
+    return { level: 1, currentExp: 0, nextNeed: 100, percentage: 0 };
   }
-  
+
+  const totalExp = userInfo.value.expValue || 0;
+  const level = userInfo.value.userLevel || 1;
+  const currentRule = LEVEL_RULES.find(r => r.level === level) || LEVEL_RULES[0];
+
+  if (level >= 18) {
+    return {
+      level: 18,
+      currentExp: totalExp - currentRule.requiredCumulativeExp,
+      nextNeed: 0,
+      percentage: 100
+    };
+  }
+
+  const currentExp = totalExp - currentRule.requiredCumulativeExp;
+  const nextNeed = currentRule.intervalExp;
+  const percentage = Math.min(100, Math.max(0, Math.round((currentExp / nextNeed) * 100)));
+
   return {
     level,
-    currentExp: currentLevelExp,
-    nextNeed: nextLevelNeed,
-    percentage: Math.min(100, Math.round((currentLevelExp / nextLevelNeed) * 100))
+    currentExp,
+    nextNeed,
+    percentage
   };
 });
 
@@ -101,18 +174,85 @@ const checkLoginStatus = () => {
   } else {
     userInfo.value = null;
   }
-  
+
   if (!userInfo.value) {
     ElMessage.warning("请先登录账号");
     router.push({ name: "login" });
   }
 };
 
+// 获取最新用户信息 (刷新经验和等级状态)
+const fetchLatestUserInfo = async () => {
+  try {
+    const infoRes = await getInfoApi();
+    if (infoRes && (infoRes.code === 200 || infoRes.user)) {
+      const latestUser = infoRes.user || infoRes;
+      userInfo.value = {
+        ...userInfo.value,
+        ...latestUser
+      };
+      localStorage.setItem("userInfo", JSON.stringify(userInfo.value));
+    }
+  } catch (err) {
+    console.error("获取最新用户信息失败：", err);
+  }
+};
+
+// 获取签到状态与历史明细
+const fetchSignStatus = async () => {
+  try {
+    const res = await getSignStatusApi();
+    if (res && res.code === 200 && res.data) {
+      signStatus.value = res.data;
+    }
+  } catch (err) {
+    console.error("加载签到数据失败：", err);
+  }
+};
+
+// 执行每日签到
+const handleSign = async () => {
+  if (signStatus.value.todaySigned) {
+    ElMessage.info("今天已经签到过啦，明天再来吧！");
+    return;
+  }
+  signLoading.value = true;
+  try {
+    const res = await doSignApi();
+    if (res && res.code === 200 && res.data) {
+      ElMessage.success(`签到成功！获得经验值 +${res.data.rewardExp}`);
+
+      // 更新签到状态并同步拉取最新历史
+      signStatus.value.todaySigned = true;
+      signStatus.value.consecutiveDays = res.data.consecutiveDays;
+      signStatus.value.totalDays = res.data.totalDays;
+      signStatus.value.lastSignTime = res.data.lastSignTime;
+
+      await fetchSignStatus();
+      await fetchLatestUserInfo();
+    }
+  } catch (err) {
+    console.error("签到操作失败：", err);
+  } finally {
+    signLoading.value = false;
+  }
+};
+
+// 判定指定日期是否已签到
+const isDateSigned = (dayStr) => {
+  if (!signStatus.value.history) return false;
+  return signStatus.value.history.some(log => log.signDate === dayStr);
+};
+
 // 获取真实数据
 const fetchData = async () => {
   if (!userInfo.value) return;
   loading.value = true;
-  
+
+  // 静默加载最新用户信息与签到状态
+  fetchLatestUserInfo();
+  fetchSignStatus();
+
   try {
     // 1. 获取我的帖子列表
     const postRes = await getPostListApi({
@@ -123,13 +263,13 @@ const fetchData = async () => {
     if (postRes && postRes.code === 200 && postRes.data) {
       myPosts.value = postRes.data.list || [];
     }
-    
+
     // 2. 获取我的收藏列表
     const collectRes = await getMyCollectedPostsApi();
     if (collectRes && collectRes.code === 200 && collectRes.data) {
       myCollects.value = collectRes.data.list || [];
     }
-    
+
     // 3. 抽取真实社区作者作为最近访问访客
     const allPostRes = await getPostListApi({ pageNum: 1, pageSize: 20 });
     if (allPostRes && allPostRes.code === 200 && allPostRes.data) {
@@ -177,20 +317,20 @@ const saveProfile = () => {
     ElMessage.warning("昵称不能为空");
     return;
   }
-  
+
   editLoading.value = true;
-  
+
   const updatedInfo = {
     ...userInfo.value,
     nickName: editForm.value.nickName,
     remark: editForm.value.remark,
     avatar: editForm.value.avatar
   };
-  
+
   localStorage.setItem("userInfo", JSON.stringify(updatedInfo));
   sessionStorage.setItem("userInfo", JSON.stringify(updatedInfo));
   userInfo.value = updatedInfo;
-  
+
   setTimeout(() => {
     ElMessage.success("资料更新成功！");
     editLoading.value = false;
@@ -280,17 +420,9 @@ onMounted(() => {
         <div class="user-meta-left">
           <!-- 头像 -->
           <div class="avatar-holder">
-            <el-avatar
-              v-if="userInfo.avatar"
-              :size="96"
-              :src="userInfo.avatar"
-              class="border border-white/10 object-cover"
-            />
-            <el-avatar
-              v-else
-              :size="96"
-              class="placeholder-avatar-large"
-            >
+            <el-avatar v-if="userInfo.avatar" :size="96" :src="userInfo.avatar"
+              class="border border-white/10 object-cover" />
+            <el-avatar v-else :size="96" class="placeholder-avatar-large">
               {{ (userInfo.nickName || userInfo.userName || "U").substring(0, 1).toUpperCase() }}
             </el-avatar>
             <!-- <button 
@@ -301,39 +433,36 @@ onMounted(() => {
               <el-icon class="text-xs"><Edit /></el-icon>
             </button> -->
           </div>
-          
+
           <!-- 基础信息 -->
           <div class="info-block">
             <div class="name-row">
               <h2 class="user-display-name">
                 {{ userInfo.nickName || userInfo.userName || "-" }}
               </h2>
-              <el-tag 
-                size="small"
-                class="level-badge"
-              >
+              <el-tag size="small" class="level-badge">
                 Lv{{ levelData.level }}
               </el-tag>
-              <el-tag 
-                v-if="stats.posts >= 3"
-                size="small"
-                class="title-badge"
-              >
+              <el-tag v-if="stats.posts >= 3" size="small" class="title-badge">
                 乐迷达人
               </el-tag>
             </div>
-            
+
             <p class="user-bio-text">
               {{ userInfo.remark || "音乐是记录生活的方式，也是与世界对话的桥梁。" }}
             </p>
-            
+
             <div class="icon-info-row">
               <span class="info-item">
-                <el-icon><Location /></el-icon>
+                <el-icon>
+                  <Location />
+                </el-icon>
                 北京
               </span>
               <span class="info-item">
-                <el-icon><Calendar /></el-icon>
+                <el-icon>
+                  <Calendar />
+                </el-icon>
                 {{ formatJoinDate(userInfo.createTime) }} 加入
               </span>
               <span class="info-item">
@@ -345,10 +474,7 @@ onMounted(() => {
 
         <!-- 右侧操作 -->
         <div class="edit-btn-holder">
-          <el-button 
-            class="edit-profile-btn"
-            @click="openEditDialog"
-          >
+          <el-button class="edit-profile-btn" @click="openEditDialog">
             编辑资料
           </el-button>
         </div>
@@ -363,37 +489,49 @@ onMounted(() => {
         <section class="stats-panel-grid">
           <!-- 2.1.1 发表帖子 -->
           <div class="stat-box-card">
-            <el-icon class="stat-micro-icon" color="red"><Edit /></el-icon>
+            <el-icon class="stat-micro-icon" color="red">
+              <Edit />
+            </el-icon>
             <span class="stat-label">发表帖子</span>
             <strong class="stat-val">{{ formatCount(stats.posts) }}</strong>
           </div>
           <!-- 2.1.2 获得回复 -->
           <div class="stat-box-card">
-            <el-icon class="stat-micro-icon" color="red"><ChatDotRound /></el-icon>
+            <el-icon class="stat-micro-icon" color="red">
+              <ChatDotRound />
+            </el-icon>
             <span class="stat-label">获得回复</span>
             <strong class="stat-val">{{ formatCount(stats.comments) }}</strong>
           </div>
           <!-- 2.1.3 浏览量 -->
           <div class="stat-box-card">
-            <el-icon class="stat-micro-icon" color="red"><View /></el-icon>
+            <el-icon class="stat-micro-icon" color="red">
+              <View />
+            </el-icon>
             <span class="stat-label">浏览量</span>
             <strong class="stat-val">{{ formatCount(stats.views) }}</strong>
           </div>
           <!-- 2.1.4 获得赞 -->
           <div class="stat-box-card">
-            <el-icon class="stat-micro-icon" color="red"><StarFilled /></el-icon>
+            <el-icon class="stat-micro-icon" color="red">
+              <StarFilled />
+            </el-icon>
             <span class="stat-label">获得赞</span>
             <strong class="stat-val">{{ formatCount(stats.likes) }}</strong>
           </div>
           <!-- 2.1.5 收藏数 -->
           <div class="stat-box-card">
-            <el-icon class="stat-micro-icon" color="red"><FolderOpened /></el-icon>
+            <el-icon class="stat-micro-icon" color="red">
+              <FolderOpened />
+            </el-icon>
             <span class="stat-label">收藏数</span>
             <strong class="stat-val">{{ formatCount(stats.collects) }}</strong>
           </div>
           <!-- 2.1.6 关注数 -->
           <div class="stat-box-card">
-            <el-icon class="stat-micro-icon" color="red"><Link /></el-icon>
+            <el-icon class="stat-micro-icon" color="red">
+              <Link />
+            </el-icon>
             <span class="stat-label">关注数</span>
             <strong class="stat-val">{{ formatCount(stats.follows) }}</strong>
           </div>
@@ -405,19 +543,23 @@ onMounted(() => {
             <h3 class="section-title">
               我的帖子
             </h3>
-         
+            <span class="section-count-badge" v-if="filteredPosts.length > 0">
+              {{ filteredPosts.length }} 篇
+            </span>
           </div>
-          
+
           <div class="post-cards-stack">
-            <div 
-              v-for="item in filteredPosts.slice(0, 3)"
-              :key="item.postId"
-              class="post-list-itemgroup"
-              @click="toPostDetail(item.postId)"
-            >
-              <!-- 1:1 胶片感渐变图做缩略图占位 -->
+            <div v-for="(item, idx) in filteredPosts.slice(0, 3)" :key="item.postId" class="post-list-itemgroup"
+              @click="toPostDetail(item.postId)">
+              <!-- 序号渐变缩略图（SVG 音符图标替代 emoji） -->
               <div class="post-thumb-placeholder" :style="getPostThumbStyle(item)">
-                <span class="music-note-icon">🎵</span>
+                <svg class="post-thumb-svg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 18V5l12-2v13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                  <circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="1.5" />
+                  <circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="1.5" />
+                </svg>
+                <span class="post-index-badge">#{{ idx + 1 }}</span>
               </div>
               <div class="post-text-content">
                 <div>
@@ -428,40 +570,46 @@ onMounted(() => {
                       {{ item.title }}
                     </h4>
                   </div>
-                  <p class="post-summary-text">
-                    {{ item.content }}
-                  </p>
+                  <!-- <p class="post-summary-text" v-html="item.content"></p> -->
                 </div>
                 <div class="post-meta-bottom-row">
-                  <span class="post-time-stamp">{{ formatJoinDate(item.createTime) }}</span>
-                  <!-- 浏览量与回复数 -->
+                  <span class="post-time-stamp">
+                    <el-icon class="meta-clock-icon">
+                      <Calendar />
+                    </el-icon>
+                    {{ formatJoinDate(item.createTime) }}
+                  </span>
                   <div class="post-stats-indicators">
-                    <span class="indicator-item"><el-icon class="indicator-icon"><View /></el-icon> {{ formatCount(item.viewCount || 0) }}</span>
-                    <span class="indicator-item"><el-icon class="indicator-icon"><ChatDotRound /></el-icon> {{ formatCount(item.replyCount || Math.floor(Math.random() * 50)) }}</span>
+                    <span class="indicator-item">
+                      <el-icon class="indicator-icon">
+                        <View />
+                      </el-icon>
+                      {{ formatCount(item.viewCount || 0) }}
+                    </span>
                   </div>
                 </div>
               </div>
-              
-              <!-- 列表项右侧操作 & 状态 -->
-              <div class="post-item-right-actions">
-                <button class="action-more-btn" @click.stop="handlePostMore(item)"><el-icon><Setting /></el-icon></button>
-                <el-icon class="action-pin-icon"><StarFilled /></el-icon>
-              </div>
             </div>
-            
+
             <div v-if="filteredPosts.length === 0" class="empty-placeholder-text">
+              <div class="empty-state-icon">
+                <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="6" y="8" width="36" height="32" rx="4" stroke="currentColor" stroke-width="2" />
+                  <line x1="14" y1="18" x2="34" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  <line x1="14" y1="26" x2="28" y2="26" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  <line x1="14" y1="34" x2="22" y2="34" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+              </div>
               暂未发表过社区帖子
             </div>
-            
+
             <div class="show-more-holder">
-              <el-button 
-                v-if="filteredPosts.length > 3"
-                link
-                class="show-more-link"
-                @click="router.push({ name: 'community' })"
-              >
+              <button v-if="filteredPosts.length > 3" class="show-more-link" @click="router.push('/user-center/posts')">
                 查看更多
-              </el-button>
+                <el-icon class="show-more-arrow">
+                  <ArrowRight />
+                </el-icon>
+              </button>
             </div>
           </div>
         </section>
@@ -474,19 +622,17 @@ onMounted(() => {
             </h3>
             <span class="sidebar-more-link" @click="router.push({ name: 'community' })">
               查看全部
-              <el-icon><ArrowRight /></el-icon>
+              <el-icon>
+                <ArrowRight />
+              </el-icon>
             </span>
           </div>
-          
+
           <!-- 收藏横拉列表容器 -->
           <div class="collect-carousel-wrapper">
             <div class="collect-cards-grid-carousel">
-              <div 
-                v-for="(item, idx) in myCollects.slice(0, 4)"
-                :key="item.postId"
-                class="collect-card-itemgroup"
-                @click="toPostDetail(item.postId)"
-              >
+              <div v-for="(item, idx) in myCollects.slice(0, 4)" :key="item.postId" class="collect-card-itemgroup"
+                @click="toPostDetail(item.postId)">
                 <!-- 精美的海报图背景 -->
                 <div class="collect-card-cover" :style="getCollectCoverStyle(idx, item)">
                   <span class="collect-card-badge">Collection</span>
@@ -495,16 +641,12 @@ onMounted(() => {
                   <h4 class="collect-card-title">
                     {{ item.title }}
                   </h4>
-                  <span class="collect-card-count">{{ formatCount(item.collectCount || Math.floor(Math.random() * 2000 + 500)) }} 收藏</span>
+                  <span class="collect-card-count">{{ formatCount(item.collectCount || Math.floor(Math.random() * 2000 +
+                    500)) }} 收藏</span>
                 </div>
               </div>
             </div>
-            
-         
           </div>
-          
-   
-          
           <div v-if="myCollects.length === 0" class="empty-placeholder-text">
             暂无收藏的帖子
           </div>
@@ -519,56 +661,92 @@ onMounted(() => {
           <div class="level-status-row">
             <strong class="level-number-text">Lv{{ levelData.level }}</strong>
             <span class="level-exp-text">
-              {{ levelData.currentExp }} / {{ levelData.nextNeed }} EXP
+              <template v-if="levelData.level >= 18">MAX LEVEL</template>
+              <template v-else>{{ levelData.currentExp }} / {{ levelData.nextNeed }} EXP</template>
             </span>
           </div>
-          <el-progress 
-            :percentage="levelData.percentage"
-            :show-text="false"
-            stroke-width="5"
+          <el-progress :percentage="levelData.percentage" :show-text="false" stroke-width="5"
             class="custom-level-progress"
-            :style="{ '--el-progress-color': 'linear-gradient(90deg, #d77475 0%, #8b3e5a 100%)' }"
-          />
+            :style="{ '--el-progress-color': 'linear-gradient(90deg, #d77475 0%, #8b3e5a 100%)' }" />
           <p class="level-remain-hint">
-            升级还需 {{ levelData.nextNeed - levelData.currentExp }} 经验值
+            <template v-if="levelData.level >= 18">您已达到社区最高等级 🎉</template>
+            <template v-else>升级还需 {{ levelData.nextNeed - levelData.currentExp }} 经验值</template>
           </p>
         </section>
 
+        <!-- 3.3 每日签到 (OLED 磨砂微晶风格) -->
+        <section class="card-glass-panel section-padding text-left sign-panel">
+          <div class="sidebar-header-row">
+            <h3 class="sidebar-title">每日签到</h3>
+            <div class="sign-streak-indicator">
+              <span class="streak-label">连签</span>
+              <strong class="streak-num">{{ signStatus.consecutiveDays }}</strong>
+              <span class="streak-label">天</span>
+            </div>
+          </div>
+
+          <!-- 微型日历控制栏 -->
+          <div class="mini-calendar-header">
+            <span class="current-month-text">{{ formatCurrentMonth }}</span>
+            <div class="calendar-arrow-group">
+              <button class="arrow-btn" @click="handlePrevMonth" title="上个月"><el-icon>
+                  <ArrowLeft />
+                </el-icon></button>
+              <button class="arrow-btn today-btn" @click="handleToday" title="回到今天">今</button>
+              <button class="arrow-btn" @click="handleNextMonth" title="下个月"><el-icon>
+                  <ArrowRight />
+                </el-icon></button>
+            </div>
+          </div>
+
+          <!-- 微型日历 -->
+          <div class="mini-calendar-wrapper">
+            <el-calendar ref="calendarRef" v-model="currentDate">
+              <template #date-cell="{ data }">
+                <div class="calendar-date-cell" :class="{ 'is-signed': isDateSigned(data.day) }">
+                  <span class="date-num">{{ parseInt(data.day.split('-')[2], 10) }}</span>
+                  <span v-if="isDateSigned(data.day)" class="signed-status-text">已签</span>
+                </div>
+              </template>
+            </el-calendar>
+          </div>
+
+          <!-- 签到指标与动作 -->
+          <div class="sign-action-bar">
+            <div class="sign-total-info">
+              累计签到 <strong>{{ signStatus.totalDays }}</strong> 天
+            </div>
+            <el-button type="primary" class="sign-submit-btn" :class="{ 'is-signed-btn': signStatus.todaySigned }"
+              :disabled="signStatus.todaySigned" :loading="signLoading" @click="handleSign">
+              {{ signStatus.todaySigned ? "今日已签到" : "立即签到" }}
+            </el-button>
+          </div>
+        </section>
+
         <!-- 3.2 最近访问 -->
-        <section class="card-glass-panel section-padding text-left visitors-panel">
+        <!-- <section class="card-glass-panel section-padding text-left visitors-panel">
           <div class="sidebar-header-row">
             <h3 class="sidebar-title">最近访问</h3>
             <span class="sidebar-more-link">
               查看全部
-              <el-icon><ArrowRight /></el-icon>
+              <el-icon>
+                <ArrowRight />
+              </el-icon>
             </span>
           </div>
-          
+
           <div class="visitors-avatars-row">
-            <div 
-              v-for="visitor in recentVisitors"
-              :key="visitor.nickName"
-              class="visitor-avatar-unit"
-            >
-              <el-avatar
-                v-if="visitor.avatar"
-                :size="42"
-                :src="visitor.avatar"
-                class="visitor-avatar-img border border-white/10"
-              />
-              <el-avatar
-                v-else
-                :size="42"
-                class="placeholder-visitor-avatar"
-              >
+            <div v-for="visitor in recentVisitors" :key="visitor.nickName" class="visitor-avatar-unit">
+              <el-avatar v-if="visitor.avatar" :size="42" :src="visitor.avatar"
+                class="visitor-avatar-img border border-white/10" />
+              <el-avatar v-else :size="42" class="placeholder-visitor-avatar">
                 {{ visitor.nickName.substring(0, 1).toUpperCase() }}
               </el-avatar>
               <span class="visitor-nickname-text">
                 {{ visitor.nickName }}
               </span>
             </div>
-            
-            <!-- 阿荣头像 -->
+
             <div class="visitor-avatar-unit">
               <el-avatar :size="42" class="arong-avatar">
                 XL
@@ -576,7 +754,7 @@ onMounted(() => {
               <span class="visitor-nickname-text">阿荣</span>
             </div>
           </div>
-        </section>
+        </section> -->
 
         <!-- 3.3 我的勋章 -->
         <section class="card-glass-panel section-padding text-left badges-panel">
@@ -584,17 +762,14 @@ onMounted(() => {
             <h3 class="sidebar-title">我的勋章</h3>
             <span class="sidebar-more-link">
               查看全部
-              <el-icon><ArrowRight /></el-icon>
+              <el-icon>
+                <ArrowRight />
+              </el-icon>
             </span>
           </div>
           <div class="badges-grid-layout">
-            <div 
-              v-for="(badge, index) in customBadges"
-              :key="badge.name"
-              class="badge-icon-box"
-              :class="['badge-style-' + index, { 'is-locked': badge.locked }]"
-              :title="badge.desc"
-            >
+            <div v-for="(badge, index) in customBadges" :key="badge.name" class="badge-icon-box"
+              :class="['badge-style-' + index, { 'is-locked': badge.locked }]" :title="badge.desc">
               <div class="badge-round-container">
                 <span class="badge-emoji">{{ badge.icon }}</span>
               </div>
@@ -606,12 +781,14 @@ onMounted(() => {
         </section>
 
         <!-- 3.4 活跃记录 -->
-        <section class="card-glass-panel section-padding text-left activity-panel">
+        <!-- <section class="card-glass-panel section-padding text-left activity-panel">
           <div class="sidebar-header-row">
             <h3 class="sidebar-title">活跃记录</h3>
             <span class="sidebar-more-link">
               查看全部
-              <el-icon><ArrowRight /></el-icon>
+              <el-icon>
+                <ArrowRight />
+              </el-icon>
             </span>
           </div>
           <div class="activity-records-stack">
@@ -619,12 +796,13 @@ onMounted(() => {
               <div class="activity-icon-badge bg-bubble">💬</div>
               <div class="activity-text-wrapper">
                 <p class="activity-content-p">
-                  你在帖子 <span class="highlight-title">《徐良音乐创作风格深度解析(长期更新)》</span> 获得了 <span class="highlight-text">88</span> 个赞
+                  你在帖子 <span class="highlight-title">《徐良音乐创作风格深度解析(长期更新)》</span> 获得了 <span
+                    class="highlight-text">88</span> 个赞
                 </p>
                 <span class="activity-time-tag">2 小时前</span>
               </div>
             </div>
-            
+
             <div class="activity-record-item">
               <div class="activity-icon-badge bg-thumb">👍</div>
               <div class="activity-text-wrapper">
@@ -634,72 +812,49 @@ onMounted(() => {
                 <span class="activity-time-tag">5 小时前</span>
               </div>
             </div>
-            
+
             <div class="activity-record-item">
               <div class="activity-icon-badge bg-star">⭐</div>
               <div class="activity-text-wrapper">
                 <p class="activity-content-p">
-                  你的帖子 <span class="highlight-title">《客官不可以》为什么能火这么多年？</span> 被 <span class="highlight-text">23</span> 人收藏
+                  你的帖子 <span class="highlight-title">《客官不可以》为什么能火这么多年？</span> 被 <span class="highlight-text">23</span>
+                  人收藏
                 </p>
                 <span class="activity-time-tag">昨天 22:15</span>
               </div>
             </div>
           </div>
-        </section>
+        </section> -->
       </div>
     </div>
 
     <!-- 资料修改弹窗 -->
-    <el-dialog
-      v-model="editDialogVisible"
-      title="修改个人资料"
-      width="460px"
-      class="custom-dark-dialog"
-      :align-center="true"
-    >
+    <el-dialog v-model="editDialogVisible" title="修改个人资料" width="460px" class="custom-dark-dialog" :align-center="true">
       <el-form :model="editForm" label-position="top">
         <el-form-item label="用户昵称" required>
-          <el-input 
-            v-model="editForm.nickName" 
-            placeholder="请输入您的昵称" 
-            maxlength="20"
-            show-word-limit
-          />
+          <el-input v-model="editForm.nickName" placeholder="请输入您的昵称" maxlength="20" show-word-limit />
         </el-form-item>
-        
+
         <el-form-item label="个性签名/简介">
-          <el-input 
-            v-model="editForm.remark" 
-            type="textarea"
-            :rows="3" 
-            placeholder="介绍一下自己吧..." 
-            maxlength="150"
-            show-word-limit
-          />
+          <el-input v-model="editForm.remark" type="textarea" :rows="3" placeholder="介绍一下自己吧..." maxlength="150"
+            show-word-limit />
         </el-form-item>
 
         <el-form-item label="头像地址 (URL)">
-          <el-input 
-            v-model="editForm.avatar" 
-            placeholder="请输入网络头像 URL 链接 (选填)" 
-          />
+          <el-input v-model="editForm.avatar" placeholder="请输入网络头像 URL 链接 (选填)" />
         </el-form-item>
       </el-form>
-      
+
       <template #footer>
         <div class="flex justify-end gap-3 mt-4">
           <el-button
             class="!border-white/10 !bg-transparent hover:!bg-white/5 !text-white/70 hover:!text-white !rounded-xl"
-            @click="editDialogVisible = false"
-          >
+            @click="editDialogVisible = false">
             取消
           </el-button>
-          <el-button
-            type="primary"
+          <el-button type="primary"
             class="!border-none !bg-[#f2b84b] hover:!bg-[#e0a63b] !text-black !font-bold !rounded-xl"
-            :loading="editLoading"
-            @click="saveProfile"
-          >
+            :loading="editLoading" @click="saveProfile">
             保存修改
           </el-button>
         </div>
@@ -726,9 +881,9 @@ onMounted(() => {
   position: relative;
   overflow: hidden;
   padding: 32px;
-  background-image: 
+  background-image:
     linear-gradient(135deg, rgba(8, 9, 13, 0.94) 0%, rgba(16, 17, 22, 0.88) 100%),
-    url('https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?q=80&w=1470&auto=format&fit=crop'); 
+    url('https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?q=80&w=1470&auto=format&fit=crop');
   background-size: cover;
   background-position: center 30%;
   background-blend-mode: overlay;
@@ -1048,38 +1203,107 @@ onMounted(() => {
 .post-cards-stack {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 6px;
 }
 
 .post-list-itemgroup {
   display: flex;
-  gap: 20px;
+  gap: 16px;
   min-height: 92px;
-  padding: 7px 0;
-  border-radius: 0;
-  border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  background-color: transparent;
-  transition: all 0.25s ease;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.005) 100%);
+  transition: all 0.2s ease;
   cursor: pointer;
   box-sizing: border-box;
+  position: relative;
+}
+
+.post-list-itemgroup::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 13px;
+  padding: 1px;
+  background: linear-gradient(135deg, transparent 0%, transparent 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
 }
 
 .post-list-itemgroup:hover {
-  background-color: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(242, 184, 75, 0.03) 0%, rgba(215, 116, 117, 0.02) 100%);
+  border-color: rgba(242, 184, 75, 0.12);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2), 0 0 30px rgba(242, 184, 75, 0.03);
+}
+
+.post-list-itemgroup:hover::before {
+  background: linear-gradient(135deg, rgba(242, 184, 75, 0.3) 0%, rgba(215, 116, 117, 0.15) 100%);
+  opacity: 1;
+}
+
+.post-list-itemgroup:active {
+  transform: translateY(0);
 }
 
 .post-thumb-placeholder {
-  width: 78px;
-  height: 78px;
-  border-radius: 10px;
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
   flex-shrink: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* SVG 音符图标替代 emoji */
+.post-thumb-svg-icon {
+  width: 26px;
+  height: 26px;
+  color: rgba(255, 255, 255, 0.7);
+  transition: transform 0.3s ease, color 0.2s ease;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
+}
+
+.post-list-itemgroup:hover .post-thumb-svg-icon {
+  transform: rotate(-8deg) scale(1.08);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 序号角标 */
+.post-index-badge {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  font-size: 8px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  padding: 1px 5px;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+}
+
+/* 帖子篇数统计角标 */
+.section-count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(242, 184, 75, 0.6);
+  background: rgba(242, 184, 75, 0.06);
+  border: 1px solid rgba(242, 184, 75, 0.1);
+  padding: 2px 10px;
+  border-radius: 99px;
+  letter-spacing: 0.04em;
 }
 
 .music-note-icon {
@@ -1104,25 +1328,27 @@ onMounted(() => {
 }
 
 .tag-top {
-  background-color: rgba(242, 184, 75, 0.15) !important;
-  border: none !important;
+  background-color: rgba(242, 184, 75, 0.12) !important;
+  border: 1px solid rgba(242, 184, 75, 0.15) !important;
   color: #f2b84b !important;
-  font-weight: 900 !important;
+  font-weight: 800 !important;
   font-size: 9px !important;
+  border-radius: 4px !important;
 }
 
 .tag-essence {
-  background-color: rgba(215, 116, 117, 0.15) !important;
-  border: none !important;
+  background-color: rgba(215, 116, 117, 0.12) !important;
+  border: 1px solid rgba(215, 116, 117, 0.15) !important;
   color: #d77475 !important;
-  font-weight: 900 !important;
+  font-weight: 800 !important;
   font-size: 9px !important;
+  border-radius: 4px !important;
 }
 
 .post-title-text {
   font-size: 14px;
-  font-weight: 900;
-  color: #fff;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.92);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1136,12 +1362,42 @@ onMounted(() => {
 
 .post-summary-text {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.35);
   margin: 0;
+  line-height: 1.6;
+  max-height: 100px; /* 首页高度有限，设置更紧凑的摘要限制高度 */
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.5;
+  display: block;
+}
+
+/* 允许少量垂直间隔 */
+.post-summary-text :deep(p) {
+  margin: 2px 0;
+}
+
+/* 缩略图模式（小尺寸，契合首页的408px高面板限制） */
+.post-summary-text :deep(img) {
+  max-width: 120px;
+  max-height: 70px;
+  width: auto;
+  height: auto;
+  object-fit: cover;
+  border-radius: 6px;
+  margin: 4px 0;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: block;
+}
+
+/* 缩视频大小（小尺寸） */
+.post-summary-text :deep(video) {
+  max-width: 150px;
+  max-height: 80px;
+  width: auto;
+  height: auto;
+  border-radius: 6px;
+  margin: 4px 0;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: block;
 }
 
 .post-meta-bottom-row {
@@ -1152,9 +1408,17 @@ onMounted(() => {
 }
 
 .post-time-stamp {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.28);
   font-weight: 600;
+}
+
+.meta-clock-icon {
+  font-size: 11px;
+  opacity: 0.6;
 }
 
 .post-stats-indicators {
@@ -1162,13 +1426,18 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.35);
 }
 
 .indicator-item {
   display: flex;
   align-items: center;
   gap: 4px;
+  transition: color 0.2s ease;
+}
+
+.post-list-itemgroup:hover .indicator-item {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .indicator-icon {
@@ -1204,25 +1473,37 @@ onMounted(() => {
   color: #d77475;
 }
 
+/* 空状态样式 */
 .empty-placeholder-text {
   padding: 32px 0;
   text-align: center;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.25);
   font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.empty-state-icon {
+  width: 40px;
+  height: 40px;
+  color: rgba(255, 255, 255, 0.12);
+}
+
+.empty-state-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .posts-panel .empty-placeholder-text {
   min-height: 300px;
-  display: flex;
-  align-items: center;
   justify-content: center;
   padding: 0;
 }
 
 .collects-panel .empty-placeholder-text {
   min-height: 132px;
-  display: flex;
-  align-items: center;
   justify-content: center;
   padding: 0;
 }
@@ -1230,18 +1511,51 @@ onMounted(() => {
 .show-more-holder {
   display: flex;
   justify-content: center;
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
 .show-more-link {
-  font-size: 12px !important;
-  font-weight: 700 !important;
-  color: rgba(255, 255, 255, 0.4) !important;
-  transition: color 0.2s ease !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.35);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 5px 16px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
 }
 
 .show-more-link:hover {
-  color: #fff !important;
+  color: #f2b84b;
+  border-color: rgba(242, 184, 75, 0.2);
+  background: rgba(242, 184, 75, 0.04);
+}
+
+.show-more-arrow {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+
+.show-more-link:hover .show-more-arrow {
+  transform: translateX(2px);
+}
+
+/* 减弱动效偏好支持 */
+@media (prefers-reduced-motion: reduce) {
+
+  .post-list-itemgroup,
+  .post-list-itemgroup::before,
+  .post-thumb-svg-icon,
+  .show-more-link,
+  .show-more-arrow {
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 /* 我的收藏 */
@@ -1407,15 +1721,25 @@ onMounted(() => {
   .posts-panel {
     height: var(--profile-post-row-height);
     min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 
-  .visitors-panel,
-  .badges-panel {
+  .posts-panel .post-cards-stack {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 0;
+  }
+
+  .visitors-panel {
     height: var(--profile-sidebar-half-height);
     min-height: 0;
   }
 
   .collects-panel,
+  .badges-panel,
   .activity-panel {
     height: var(--profile-bottom-row-height);
     min-height: 0;
@@ -1587,28 +1911,28 @@ onMounted(() => {
 
 .badge-style-0 .badge-round-container {
   background: radial-gradient(circle at 50% 10%, rgba(215, 116, 117, 0.3), rgba(215, 116, 117, 0.05)),
-              linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
   border: 1px solid rgba(215, 116, 117, 0.4);
   box-shadow: 0 4px 15px rgba(215, 116, 117, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .badge-style-1 .badge-round-container {
   background: radial-gradient(circle at 50% 10%, rgba(242, 184, 75, 0.3), rgba(242, 184, 75, 0.05)),
-              linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
   border: 1px solid rgba(242, 184, 75, 0.4);
   box-shadow: 0 4px 15px rgba(242, 184, 75, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .badge-style-2 .badge-round-container {
   background: radial-gradient(circle at 50% 10%, rgba(139, 62, 90, 0.35), rgba(139, 62, 90, 0.05)),
-              linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
   border: 1px solid rgba(139, 62, 90, 0.4);
   box-shadow: 0 4px 15px rgba(139, 62, 90, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .badge-style-3 .badge-round-container {
   background: radial-gradient(circle at 50% 10%, rgba(99, 215, 231, 0.3), rgba(99, 215, 231, 0.05)),
-              linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
   border: 1px solid rgba(99, 215, 231, 0.4);
   box-shadow: 0 4px 15px rgba(99, 215, 231, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
@@ -1773,5 +2097,300 @@ onMounted(() => {
 :deep(.custom-dark-dialog .el-input__count) {
   background-color: transparent !important;
   color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* ==================== 每日签到模块样式 ==================== */
+.sign-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+@media (min-width: 1200px) {
+  .sign-panel {
+    height: var(--profile-post-row-height);
+    min-height: 0;
+    justify-content: space-between;
+    gap: 0;
+    /* 固定高度下利用 space-between 进行自然对称分布 */
+  }
+}
+
+.sign-streak-indicator {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  background: rgba(242, 184, 75, 0.08);
+  border: 1px solid rgba(242, 184, 75, 0.15);
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+.streak-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(242, 184, 75, 0.6);
+}
+
+.streak-num {
+  font-size: 14px;
+  font-weight: 900;
+  color: #f2b84b;
+  text-shadow: 0 0 10px rgba(242, 184, 75, 0.3);
+}
+
+/* 自定义日历控制 Header */
+.mini-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  margin-bottom: 6px;
+}
+
+.current-month-text {
+  font-size: 12px;
+  font-weight: 900;
+  color: #fff8ea;
+  text-shadow: 0 0 8px rgba(255, 248, 234, 0.1);
+  letter-spacing: 0.05em;
+}
+
+.calendar-arrow-group {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.calendar-arrow-group .arrow-btn {
+  background: transparent;
+  border: none;
+  width: 22px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.calendar-arrow-group .arrow-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f2b84b;
+}
+
+.calendar-arrow-group .arrow-btn:active {
+  transform: scale(0.95);
+}
+
+.calendar-arrow-group .today-btn {
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.calendar-arrow-group .today-btn:hover {
+  color: #fff;
+}
+
+/* 迷你日历的精细化样式覆盖 */
+.mini-calendar-wrapper {
+  background: rgba(16, 17, 22, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 8px 10px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.mini-calendar-wrapper :deep(.el-calendar) {
+  background: transparent !important;
+  --el-calendar-cell-width: 32px;
+}
+
+.mini-calendar-wrapper :deep(.el-calendar__header) {
+  display: none !important;
+  /* 彻底隐藏默认 Header */
+}
+
+.mini-calendar-wrapper :deep(.el-calendar__body) {
+  padding: 0 !important;
+}
+
+.mini-calendar-wrapper :deep(.el-calendar-table) {
+  width: 100%;
+}
+
+.mini-calendar-wrapper :deep(.el-calendar-table thead th) {
+  padding: 4px 0 !important;
+  color: rgba(255, 248, 234, 0.35);
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.mini-calendar-wrapper :deep(.el-calendar-table .el-calendar-day) {
+  height: 36px !important;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* 覆盖并彻底消除 Element Plus 默认高亮 (包括 hover 选中和 is-today 默认浅蓝色底色) */
+.mini-calendar-wrapper :deep(.el-calendar-table tr td),
+.mini-calendar-wrapper :deep(.el-calendar-table tr td.is-today),
+.mini-calendar-wrapper :deep(.el-calendar-table tr td.is-selected) {
+  background-color: transparent !important;
+  border: none !important;
+}
+
+/* 悬停 (Hover) 微交互特效 */
+.mini-calendar-wrapper :deep(.el-calendar-table .el-calendar-day:hover .calendar-date-cell) {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.mini-calendar-wrapper :deep(.el-calendar-table .el-calendar-day:hover .date-num) {
+  color: #fff !important;
+}
+
+/* 单元格自定义排版 */
+.calendar-date-cell {
+  position: relative;
+  width: 28px;
+  height: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.date-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 248, 234, 0.45);
+  line-height: 1.1;
+}
+
+/* 非本月日期变暗 */
+.mini-calendar-wrapper :deep(.el-calendar-table tr td.prev-month .date-num),
+.mini-calendar-wrapper :deep(.el-calendar-table tr td.next-month .date-num) {
+  color: rgba(255, 248, 234, 0.12) !important;
+}
+
+/* 今天 (Today) 默认视觉引导（带磨砂发光细白圈） */
+.mini-calendar-wrapper :deep(.el-calendar-table td.is-today .calendar-date-cell) {
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.mini-calendar-wrapper :deep(.el-calendar-table td.is-today .date-num) {
+  color: #fff !important;
+  font-weight: 900;
+}
+
+/* 已签到日期状态 (金粉微光) */
+.calendar-date-cell.is-signed {
+  background: rgba(242, 184, 75, 0.08) !important;
+  box-shadow: 0 0 0 1px rgba(242, 184, 75, 0.25) inset !important;
+}
+
+.calendar-date-cell.is-signed .date-num {
+  color: #f2b84b !important;
+  font-weight: 900;
+}
+
+/* 已签到微字特效 */
+.signed-status-text {
+  font-size: 8px;
+  font-weight: 900;
+  color: #f2b84b;
+  transform: scale(0.85);
+  line-height: 1;
+  margin-top: 1px;
+  text-shadow: 0 0 6px rgba(242, 184, 75, 0.4);
+}
+
+/* 选中日期的微交互外观 */
+.mini-calendar-wrapper :deep(.el-calendar-table td.is-selected .calendar-date-cell) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3) !important;
+}
+
+.mini-calendar-wrapper :deep(.el-calendar-table td.is-selected .calendar-date-cell.is-signed) {
+  background: rgba(242, 184, 75, 0.12) !important;
+  box-shadow: 0 0 0 1px rgba(242, 184, 75, 0.45) inset, 0 0 8px rgba(242, 184, 75, 0.15) !important;
+}
+
+.mini-calendar-wrapper :deep(.el-calendar-table td.is-selected .date-num) {
+  color: #fff !important;
+}
+
+/* 签到动作区域 */
+.sign-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  gap: 12px;
+}
+
+.sign-total-info {
+  font-size: 11px;
+  color: rgba(255, 248, 234, 0.4);
+  font-weight: 600;
+}
+
+.sign-total-info strong {
+  color: #fff8ea;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* 渐变发光签到按钮 */
+.sign-submit-btn {
+  height: 36px !important;
+  padding: 0 16px !important;
+  border: none !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  border-radius: 10px !important;
+  background: linear-gradient(90deg, #d77475 0%, #f2b84b 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 15px rgba(215, 116, 117, 0.2) !important;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.sign-submit-btn:not(.is-signed-btn):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(215, 116, 117, 0.3) !important;
+}
+
+.sign-submit-btn:not(.is-signed-btn):active {
+  transform: translateY(0);
+}
+
+/* 已签到按钮样式：呈磨砂置灰半透禁用态 */
+.sign-submit-btn.is-signed-btn {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.24) !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
 }
 </style>

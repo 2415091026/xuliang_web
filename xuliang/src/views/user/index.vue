@@ -1,31 +1,70 @@
 <script setup>
-import { ref, watch } from "vue";
+import { ref, watch, provide, computed, onMounted, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { 
-  User, 
-  Document, 
-  ChatLineRound, 
-  Star, 
-  Compass, 
-  Bell, 
+import {
+  User,
+  Document,
+  ChatLineRound,
+  Star,
+  Compass,
+  Bell,
   Setting,
   HomeFilled,
   CirclePlus
 } from "@element-plus/icons-vue";
+import { getUnreadCountApi } from "../../api/message";
+import { on, off } from "../../utils/socket";
 
 const router = useRouter();
 const route = useRoute();
 
+// 响应式未读消息计数
+const unreadCount = ref(0);
+
+// 获取最新未读消息计数
+const fetchUnreadCount = async () => {
+  try {
+    const res = await getUnreadCountApi();
+    if (res.code === 200 || res.data) {
+      const data = res.data || res;
+      unreadCount.value = data.unreadCount || 0;
+    }
+  } catch (error) {
+    console.error("个人中心获取未读数失败：", error);
+  }
+};
+
+// 接收 WebSocket 实时广播的消息并更新未读数（全局响应）
+const handleNewMessage = (data) => {
+  console.log("[WebSocket] 个人中心监听到新消息，未读数递增");
+  unreadCount.value++;
+};
+
+onMounted(() => {
+  fetchUnreadCount();
+  on("new_message", handleNewMessage);
+});
+
+onUnmounted(() => {
+  off("new_message", handleNewMessage);
+});
+
+// 共享未读状态及刷新方法给子路由组件 (例如 messages.vue)
+provide("unreadCountState", {
+  unreadCount,
+  fetchUnreadCount
+});
+
 // 导航菜单选项 (菜单项与路由 name 绑定，高亮控制)
-const menuItems = [
+const menuItems = computed(() => [
   { key: "user-center", label: "我的主页", icon: User },
   { key: "user-center-posts", label: "我的帖子", icon: Document },
-  { key: "user-center-replies", label: "我的回复", icon: ChatLineRound },
+  // { key: "user-center-replies", label: "我的回复", icon: ChatLineRound },
   { key: "user-center-collects", label: "我的收藏", icon: Star },
-  { key: "user-center-follow", label: "我的关注", icon: Compass },
-  { key: "user-center-messages", label: "消息中心", icon: Bell, badge: 6 },
-  { key: "user-center-settings", label: "系统设置", icon: Setting }
-];
+  // { key: "user-center-follow", label: "我的关注", icon: Compass },
+  { key: "user-center-messages", label: "消息中心", icon: Bell, badge: unreadCount.value },
+  // { key: "user-center-settings", label: "系统设置", icon: Setting }
+]);
 
 // 根据当前路由的 name 属性做双向绑定，实现精准高亮点亮
 const activeMenu = ref("user-center");
@@ -56,41 +95,35 @@ const handleMenuClick = (key) => {
         <div class="card-glass-panel p-4 sidebar-panel-card">
           <!-- 标志性的玫红渐变大标题横幅，100% 还原效果图 2 -->
           <div class="sidebar-title-banner">
-            <el-icon class="text-lg text-white"><HomeFilled /></el-icon>
+            <el-icon class="text-lg text-white">
+              <HomeFilled />
+            </el-icon>
             个人中心
           </div>
 
           <!-- 导航菜单项列表 -->
           <nav class="sidebar-nav">
-            <button
-              v-for="item in menuItems"
-              :key="item.key"
-              @click="handleMenuClick(item.key)"
-              class="nav-menu-btn"
-              :class="{ 'is-active': activeMenu === item.key }"
-            >
+            <button v-for="item in menuItems" :key="item.key" @click="handleMenuClick(item.key)" class="nav-menu-btn"
+              :class="{ 'is-active': activeMenu === item.key }">
               <span class="flex items-center gap-3">
-                <el-icon class="text-base"><component :is="item.icon" /></el-icon>
+                <el-icon class="text-base">
+                  <component :is="item.icon" />
+                </el-icon>
                 {{ item.label }}
               </span>
-              <span 
-                v-if="item.badge"
-                class="menu-badge"
-              >
+              <span v-if="item.badge" class="menu-badge">
                 {{ item.badge }}
               </span>
             </button>
           </nav>
-          
+
           <!-- 下方发布新帖按钮 -->
           <div class="sidebar-divider">
-            <el-button 
-              type="primary" 
-              class="publish-trigger-btn"
-              @click="router.push({ name: 'community' })"
-            >
+            <el-button type="primary" class="publish-trigger-btn" @click="router.push({ name: 'community' })">
               发布新帖
-              <el-icon class="text-base ml-2"><CirclePlus /></el-icon>
+              <el-icon class="text-base ml-2">
+                <CirclePlus />
+              </el-icon>
             </el-button>
           </div>
         </div>
@@ -111,7 +144,7 @@ const handleMenuClick = (key) => {
   padding: 32px 0;
   box-sizing: border-box;
   background: radial-gradient(circle at 10% 20%, rgba(215, 116, 117, 0.08) 0%, transparent 40vw),
-              radial-gradient(circle at 90% 80%, rgba(99, 215, 231, 0.04) 0%, transparent 45vw);
+    radial-gradient(circle at 90% 80%, rgba(99, 215, 231, 0.04) 0%, transparent 45vw);
 }
 
 /* ==================== 主体大布局 ==================== */

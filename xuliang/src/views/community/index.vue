@@ -10,6 +10,7 @@ import {
   getCommentTreeApi,
   createCommentApi
 } from "../../api/community";
+import WangEditor from "../../components/WangEditor.vue"; // 引入封装好的富文本组件
 
 const router = useRouter();
 
@@ -288,6 +289,14 @@ watch([selectedCategoryId, sortBy], () => {
   handleFilterChange();
 });
 
+// 过滤 HTML 标签提取纯文本，用于社区列表帖子内容摘要展示
+const filterHtml = (html) => {
+  if (!html) return "-";
+  // 去除所有 HTML 标签并过滤多余空格
+  const text = html.replace(/<[^>]+>/g, "").trim();
+  return text || "-";
+};
+
 onMounted(() => {
   checkLoginStatus();
   fetchCategories();
@@ -449,7 +458,7 @@ onMounted(() => {
 
               <!-- 帖子正文摘要 -->
               <p class="m-0 mt-2 text-xs leading-normal text-white/50 line-clamp-2">
-                {{ post.content || "-" }}
+                {{ filterHtml(post.content) }}
               </p>
 
               <!-- 底部署名：发帖人与发布时间 -->
@@ -511,7 +520,7 @@ onMounted(() => {
     <el-dialog
       v-model="isPublishDialogOpen"
       title="发表新帖子"
-      width="500px"
+      width="750px"
       class="publish-dialog"
       :before-close="closePublishDialog"
       destroy-on-close
@@ -531,9 +540,9 @@ onMounted(() => {
           <el-input v-model="publishForm.title" placeholder="请输入标题..." />
         </el-form-item>
 
-        <!-- 正文输入 -->
+        <!-- 正文输入 (使用封装好的富文本编辑器) -->
         <el-form-item label="帖子正文">
-          <el-input v-model="publishForm.content" type="textarea" :rows="6" placeholder="跟大家分享你的精彩想法与见解吧..." />
+          <WangEditor v-model="publishForm.content" placeholder="跟大家分享你的精彩想法与见解吧..." height="280px" />
         </el-form-item>
       </el-form>
 

@@ -527,9 +527,8 @@ onMounted(() => {
         </div>
       </header>
 
-      <!-- 帖子内容正文 -->
-      <section class="mt-6 text-left text-sm md:text-base leading-8 text-white/80 whitespace-pre-wrap">
-        {{ post.content || "-" }}
+      <section class="mt-6 text-left text-sm md:text-base leading-8 text-white/80 rich-text-content">
+        <div v-html="post.content || '-'"></div>
 
         <!-- 演唱会高保真舞台插图 -->
         <!-- <div class="mt-8 overflow-hidden rounded-2xl border border-white/5 shadow-xl">
@@ -1032,4 +1031,17 @@ button {
   background-color: transparent !important;
   color: rgba(255, 255, 255, 0.3) !important;
 }
+
+/* 详情页富文本样式恢复，避免 Tailwind Preflight 导致标题、列表和加粗显示异常 */
+.rich-text-content :deep(h1) { font-size: 1.875rem; font-weight: bold; margin-top: 1rem; margin-bottom: 1rem; color: #fff; }
+.rich-text-content :deep(h2) { font-size: 1.5rem; font-weight: bold; margin-top: 0.75rem; margin-bottom: 0.75rem; color: #fff; }
+.rich-text-content :deep(h3) { font-size: 1.25rem; font-weight: bold; margin-top: 0.5rem; margin-bottom: 0.5rem; color: #fff; }
+.rich-text-content :deep(h4) { font-size: 1.125rem; font-weight: bold; margin-top: 0.5rem; margin-bottom: 0.5rem; color: #fff; }
+.rich-text-content :deep(h5) { font-size: 1rem; font-weight: bold; margin-top: 0.25rem; margin-bottom: 0.25rem; color: #fff; }
+.rich-text-content :deep(p) { margin-top: 0.5rem; margin-bottom: 0.5rem; line-height: 1.625; }
+.rich-text-content :deep(ul) { list-style-type: disc; padding-left: 1.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+.rich-text-content :deep(ol) { list-style-type: decimal; padding-left: 1.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+.rich-text-content :deep(a) { color: #f2b84b; text-decoration: underline; }
+.rich-text-content :deep(a:hover) { color: #e0a63b; }
+.rich-text-content :deep(blockquote) { border-left-width: 4px; border-color: #f2b84b; padding-left: 1rem; font-style: italic; margin-top: 0.5rem; margin-bottom: 0.5rem; color: rgba(255, 255, 255, 0.6); }
 </style>
