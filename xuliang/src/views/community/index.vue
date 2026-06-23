@@ -159,14 +159,23 @@ const fetchPostList = () => {
     pageSize: pageSize.value,
     title: searchQuery.value ? searchQuery.value.trim() : undefined,
     categoryId: selectedCategoryId.value ? selectedCategoryId.value : undefined,
-    status: "0"
+    status: "0",
+    excludeReported: "1"
   };
 
   getPostListApi(params)
     .then((res) => {
       if (res && res.code === 200 && res.data) {
-        posts.value = res.data.list || [];
+        const rawList = res.data.list || [];
+        
+        // 双重过滤：拉取本地当前用户自己举报的帖子进行前端二次屏蔽
+        const userId = userInfo.value?.userId || "guest";
+        const reportedKey = `reported_posts_${userId}`;
+        const reportedList = JSON.parse(localStorage.getItem(reportedKey) || "[]");
+        
+        posts.value = rawList.filter((post) => !reportedList.includes(Number(post.postId)));
         totalPosts.value = res.data.total || 0;
+        
         // 异步获取每条帖子的真实评论数
         posts.value.forEach((post) => {
           fetchCommentCounts(post.postId);
@@ -650,6 +659,134 @@ onMounted(() => {
 
 <style>
 /* 全局覆盖：Element Plus 下拉浮层(Popper)暗黑磨砂玻璃样式 */
+.publish-dialog {
+  width: min(520px, calc(100vw - 32px)) !important;
+  overflow: hidden;
+  border-radius: 20px !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  background: linear-gradient(180deg, rgba(18, 19, 25, 0.98), rgba(12, 13, 18, 0.98)) !important;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.publish-dialog .el-dialog__header {
+  margin: 0;
+  padding: 24px 28px 10px;
+}
+
+.publish-dialog .el-dialog__title {
+  color: #fff8ea;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.publish-dialog .el-dialog__headerbtn {
+  top: 16px;
+  right: 18px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+
+.publish-dialog .el-dialog__headerbtn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.publish-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: rgba(255, 248, 234, 0.58);
+  font-size: 18px;
+}
+
+.publish-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: #fff8ea;
+}
+
+.publish-dialog .el-dialog__body {
+  padding: 8px 28px 6px;
+  color: #fff8ea;
+}
+
+.publish-dialog .el-dialog__footer {
+  padding: 10px 28px 24px;
+}
+
+.publish-dialog .el-form-item {
+  margin-bottom: 18px;
+}
+
+.publish-dialog .el-form-item__label {
+  padding-bottom: 7px !important;
+  color: rgba(255, 248, 234, 0.72) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+}
+
+.publish-dialog .el-input__wrapper,
+.publish-dialog .el-select__wrapper {
+  min-height: 42px;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.publish-dialog .el-input__wrapper:hover,
+.publish-dialog .el-select__wrapper:hover {
+  background: rgba(255, 255, 255, 0.065) !important;
+  box-shadow: 0 0 0 1px rgba(242, 184, 75, 0.35) inset !important;
+}
+
+.publish-dialog .el-input__wrapper.is-focus,
+.publish-dialog .el-select__wrapper.is-focused,
+.publish-dialog .el-select__wrapper.is-focus {
+  background: rgba(255, 255, 255, 0.075) !important;
+  box-shadow: 0 0 0 1px rgba(242, 184, 75, 0.72) inset !important;
+}
+
+.publish-dialog .el-input__inner,
+.publish-dialog .el-select__selected-item,
+.publish-dialog .el-select__placeholder {
+  color: #fff8ea !important;
+  font-size: 13px !important;
+  font-weight: 700;
+}
+
+.publish-dialog .el-input__inner::placeholder,
+.publish-dialog .el-textarea__inner::placeholder {
+  color: rgba(255, 248, 234, 0.32) !important;
+}
+
+.publish-dialog .el-textarea__inner {
+  min-height: 138px !important;
+  padding: 12px 14px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+  color: #fff8ea !important;
+  font-size: 13px !important;
+  line-height: 1.65 !important;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  resize: vertical;
+}
+
+.publish-dialog .el-textarea__inner:hover {
+  background: rgba(255, 255, 255, 0.065) !important;
+  box-shadow: 0 0 0 1px rgba(242, 184, 75, 0.35) inset !important;
+}
+
+.publish-dialog .el-textarea__inner:focus {
+  background: rgba(255, 255, 255, 0.075) !important;
+  box-shadow: 0 0 0 1px rgba(242, 184, 75, 0.72) inset !important;
+}
+
+.publish-dialog .el-button {
+  height: 36px;
+}
+
 .el-select__popper.el-popper {
   background: rgba(16, 17, 22, 0.98) !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;

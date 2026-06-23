@@ -28,7 +28,7 @@ service.interceptors.response.use(
     const res = response.data
 
     if (res.code && res.code !== 200) {
-      ElMessage.error(res.message || '请求服务发生异常')
+      ElMessage.error(res.msg || '请求服务发生异常')
 
       if (res.code === 401) {
         localStorage.removeItem('token')
@@ -36,7 +36,7 @@ service.interceptors.response.use(
         sessionStorage.removeItem('token')
         sessionStorage.removeItem('userInfo')
       }
-      return Promise.reject(new Error(res.message || 'Error'))
+      return Promise.reject(new Error(res.msg || 'Error'))
     }
 
     return res
@@ -46,7 +46,7 @@ service.interceptors.response.use(
     let message = '网络异常，请检查网络后重试'
 
     if (error.response) {
-      const status = error.response.status
+      const status = error.response.code
       switch (status) {
         case 400:
           message = '请求参数不正确'
@@ -68,7 +68,7 @@ service.interceptors.response.use(
           message = '服务器内部错误'
           break
         default:
-          message = error.response.data?.message || `网络连接出错(${status})`
+          message = error.response?.msg || `网络连接出错(${status})`
       }
     } else if (error.message?.includes('timeout')) {
       message = '请求响应超时，请检查您的网络连接'

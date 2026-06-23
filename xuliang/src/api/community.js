@@ -127,3 +127,31 @@ export const toggleCommentLikeApi = (commentId) => {
   });
 };
 
+/**
+ * 举报帖子
+ * @param {Object} data 举报数据
+ * @param {number} data.postId 帖子ID
+ * @param {string} data.reason 举报原因
+ * @param {string} [data.content] 举报详细说明
+ * @returns {Promise} axios 请求的 Promise 对象
+ */
+export const reportPostApi = (data) => {
+  return request({
+    url: "/admin/forum/post/report",
+    method: "post",
+    data,
+  });
+};
+
+/**
+ * 获取当前登录用户收藏的帖子列表
+ * @returns {Promise} axios 请求的 Promise 对象
+ */
+export const getMyCollectedPostsApi = () => {
+  return request({
+    url: "/admin/forum/post/collect/my",
+    method: "get",
+  });
+};
+
+
