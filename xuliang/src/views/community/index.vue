@@ -10,6 +10,7 @@ import {
   getCommentTreeApi,
   createCommentApi
 } from "../../api/community";
+import { getInfoApi } from "../../api/login";
 import WangEditor from "../../components/WangEditor.vue"; // 引入封装好的富文本组件
 
 const router = useRouter();
@@ -131,12 +132,36 @@ const checkLoginStatus = () => {
   if (token && infoStr) {
     try {
       userInfo.value = JSON.parse(infoStr);
+      // 默默异步更新下最新的 userInfo，包含角色权限，避免本地缓存过期
+      getInfoApi()
+        .then((res) => {
+          if (res && res.code === 200) {
+            const updatedUser = {
+              ...(res.user || res),
+              roles: res.roles,
+              permissions: res.permissions
+            };
+            userInfo.value = updatedUser;
+            const targetStorage = localStorage.getItem("token") ? localStorage : sessionStorage;
+            targetStorage.setItem("userInfo", JSON.stringify(updatedUser));
+          }
+        })
+        .catch(() => {});
     } catch (e) {
       userInfo.value = null;
     }
   } else {
     userInfo.value = null;
   }
+};
+
+// 判断当前分类是否对于当前用户是禁用的（非管理员不可发布公告）
+const isCategoryDisabled = (cat) => {
+  if (cat.name.includes("公告")) {
+    const isAdmin = userInfo.value?.userName === "admin" || userInfo.value?.roles?.includes("admin");
+    return !isAdmin;
+  }
+  return false;
 };
 
 // 获取分类板块列表
@@ -240,6 +265,17 @@ const handlePublishPost = () => {
     ElMessage.warning("请选择板块分类");
     return;
   }
+
+  // 二次安全校验：判断所选版块是否为公告，且拦截非管理员的发帖
+  const selectedCat = categories.value.find((c) => c.categoryId === categoryId);
+  if (selectedCat && selectedCat.name.includes("公告")) {
+    const isAdmin = userInfo.value?.userName === "admin" || userInfo.value?.roles?.includes("admin");
+    if (!isAdmin) {
+      ElMessage.warning("您没有权限在公告专区发布帖子");
+      return;
+    }
+  }
+
   if (!title.trim()) {
     ElMessage.warning("帖子标题不能为空");
     return;
@@ -531,7 +567,7 @@ onMounted(() => {
         <!-- 分类选择 -->
         <el-form-item label="选择板块">
           <el-select v-model="publishForm.categoryId" placeholder="请选择板块" class="w-full font-sans" effect="dark" :teleported="false">
-            <el-option v-for="cat in categories" :key="cat.categoryId" :value="cat.categoryId" :label="cat.name" />
+            <el-option v-for="cat in categories" :key="cat.categoryId" :value="cat.categoryId" :label="cat.name" :disabled="isCategoryDisabled(cat)" />
           </el-select>
         </el-form-item>
 
@@ -669,7 +705,7 @@ onMounted(() => {
 <style>
 /* 全局覆盖：Element Plus 下拉浮层(Popper)暗黑磨砂玻璃样式 */
 .publish-dialog {
-  width: min(520px, calc(100vw - 32px)) !important;
+  width: min(750px, calc(100vw - 32px)) !important;
   overflow: hidden;
   border-radius: 20px !important;
   border: 1px solid rgba(255, 255, 255, 0.09) !important;

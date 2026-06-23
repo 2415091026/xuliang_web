@@ -2,7 +2,9 @@
 import { ref, computed, onMounted, watch, inject } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
+import { Search } from "@element-plus/icons-vue";
 import { getMusicListApi } from "../../api/music";
+import { audioPlayer } from "../../utils/audioPlayer";
 
 const route = useRoute();
 const router = useRouter();
@@ -95,6 +97,10 @@ const fetchSongs = async () => {
       pageSize: pageSize.value,
       pageNum: pageNum.value
     };
+
+    if (searchQuery.value.trim()) {
+      params.name = searchQuery.value.trim();
+    }
 
     if (route.query.albumId) {
       params.albumId = route.query.albumId;
@@ -220,6 +226,15 @@ watch([activeGenre, searchQuery], () => {
   fetchSongs();
 });
 
+// 实时同步当前板块排序、筛选后的歌曲列表至全局播放器队列，解决切歌及自动下一首的数据同步问题
+watch(
+  filteredSongs,
+  (newSongs) => {
+    audioPlayer.allSongs = newSongs;
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
   fetchSongs();
 });
@@ -266,27 +281,16 @@ onMounted(() => {
       <!-- 搜索框与视图切换 -->
       <div class="flex items-center gap-3 max-[520px]:w-full">
         <!-- 搜索框 -->
-        <div class="relative max-[520px]:flex-grow">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="搜索歌曲 / 专辑"
-            class="h-9 w-52 rounded-full border border-white/10 bg-black/32 pl-9 pr-4 text-xs font-semibold text-[#fff8ea] placeholder-[#fff8ea]/24 transition-all focus:w-60 focus:border-[#ff4f63]/52 focus:bg-black/48 focus:outline-none max-[520px]:w-full max-[520px]:focus:w-full"
-          />
-          <svg
-            class="absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-[#fff8ea]/28"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2.5"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-        </div>
+        <el-input
+          v-model="searchQuery"
+          placeholder="搜索歌曲 / 专辑"
+          class="custom-search-input max-[520px]:!w-full"
+          clearable
+        >
+          <template #prefix>
+            <el-icon class="text-[#fff8ea]/28"><Search /></el-icon>
+          </template>
+        </el-input>
 
         <!-- 切换列表/网格视图按钮 -->
         <div class="flex items-center rounded-lg border border-white/10 bg-black/24 p-0.5 backdrop-blur-xl">
@@ -577,3 +581,41 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 深度覆盖 Element Plus Input 样式以契合暗黑风格 */
+.custom-search-input {
+  width: 13rem;
+  transition: all 0.3s ease;
+}
+
+.custom-search-input:focus-within {
+  width: 15rem;
+}
+
+:deep(.custom-search-input .el-input__wrapper) {
+  background-color: rgba(0, 0, 0, 0.32) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+  border-radius: 9999px !important;
+  height: 36px !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+  transition: all 0.3s ease;
+}
+
+:deep(.custom-search-input .el-input__wrapper.is-focus) {
+  border-color: rgba(255, 79, 99, 0.52) !important;
+  background-color: rgba(0, 0, 0, 0.48) !important;
+}
+
+:deep(.custom-search-input .el-input__inner) {
+  color: #fff8ea !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+:deep(.custom-search-input .el-input__inner::placeholder) {
+  color: rgba(255, 248, 234, 0.24) !important;
+}
+</style>

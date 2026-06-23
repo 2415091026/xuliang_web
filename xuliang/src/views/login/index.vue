@@ -2,7 +2,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { User, Lock } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
-import { getInfoApi, loginApi, registerApi } from "../../api/login";
+import { getInfoApi, loginApi, registerApi, getCodeImgApi } from "../../api/login";
 import { useRouter } from "vue-router";
 import heroBg from "../../assets/images/09.jpg";
 import { initSocket } from "../../utils/socket";
@@ -20,8 +20,46 @@ const isLogin = ref(true);
 const loginForm = reactive({
   userName: "",
   password: "",
-  rememberMe: true
+  rememberMe: true,
+  code: "",
+  uuid: ""
 });
+
+// 验证码状态管理
+const authCodeInfo = reactive({
+  captchaEnabled: true, // 验证码开关
+  loading: false,
+  imgUrl: "",
+  uuid: ""
+});
+
+// 获取验证码图片
+const getValidateCode = async (isClick = false) => {
+  if (isClick && !loginForm.userName.trim()) {
+    ElMessage.error("请输入用户账号");
+    return;
+  }
+  if (isClick && !loginForm.password.trim()) {
+    ElMessage.error("请输入用户密码");
+    return;
+  }
+  if (authCodeInfo.loading) return;
+
+  authCodeInfo.loading = true;
+  try {
+    const res = await getCodeImgApi();
+    const data = res.data || res;
+    authCodeInfo.captchaEnabled = data.captchaEnabled !== false;
+    authCodeInfo.uuid = data.uuid || "";
+    if (authCodeInfo.captchaEnabled) {
+      authCodeInfo.imgUrl = data.img || "";
+    }
+  } catch (err) {
+    console.error("获取验证码异常：", err);
+  } finally {
+    authCodeInfo.loading = false;
+  }
+};
 
 // 注册表单对象
 const registerForm = reactive({
@@ -56,11 +94,18 @@ const handleLogin = async () => {
     ElMessage.warning("请输入用户名和密码");
     return;
   }
+  
+  if (authCodeInfo.captchaEnabled && !loginForm.code.trim()) {
+    ElMessage.warning("请输入验证码");
+    return;
+  }
 
   try {
     const res = await loginApi({
       userName: loginForm.userName,
-      password: loginForm.password
+      password: loginForm.password,
+      code: loginForm.code,
+      uuid: authCodeInfo.uuid
     });
 
     ElMessage.success("登录成功");
@@ -76,7 +121,11 @@ const handleLogin = async () => {
       targetStorage.setItem(TOKEN_KEY, token);
 
       const infoRes = await getInfoApi();
-      const userInfo = infoRes.user || infoRes;
+      const userInfo = {
+        ...(infoRes.user || infoRes),
+        roles: infoRes.roles || [],
+        permissions: infoRes.permissions || []
+      };
       saveLoginState(token, userInfo);
       // 登录成功建立 WebSocket 连接
       initSocket(token);
@@ -86,6 +135,9 @@ const handleLogin = async () => {
   } catch (error) {
     // 接口请求异常已在 request.js 中通过 ElMessage 全局拦截中文报错
     console.error("登录发生异常：", error);
+    if (authCodeInfo.captchaEnabled) {
+      getValidateCode();
+    }
   }
 };
 
@@ -128,6 +180,8 @@ onMounted(() => {
   if (loginForm.rememberMe) {
     loginForm.userName = localStorage.getItem(REMEMBERED_USERNAME_KEY) || "";
   }
+  
+  getValidateCode();
 });
 </script>
 
@@ -190,6 +244,22 @@ onMounted(() => {
                   <el-icon class="text-lg text-[#fff8ea]/48 mr-1"><Lock /></el-icon>
                 </template>
               </el-input>
+            </el-form-item>
+
+            <el-form-item v-if="authCodeInfo.captchaEnabled">
+              <div class="flex items-center gap-3 w-full">
+                <el-input v-model="loginForm.code" placeholder="验证码" class="custom-input flex-grow" maxlength="4">
+                  <template #prefix>
+                    <el-icon class="text-lg text-[#fff8ea]/48 mr-1"><Lock /></el-icon>
+                  </template>
+                </el-input>
+                <div 
+                  class="captcha-img-container cursor-pointer flex-shrink-0" 
+                  v-html="authCodeInfo.imgUrl" 
+                  @click="getValidateCode(true)"
+                  title="点击刷新验证码"
+                ></div>
+              </div>
             </el-form-item>
 
             <div class="flex items-center justify-between text-sm font-semibold text-[#fff8ea]/70 mb-5">
@@ -321,5 +391,30 @@ onMounted(() => {
 }
 .custom-login-form :deep(.el-form-item__content) {
   line-height: normal !important;
+}
+
+.captcha-img-container {
+  height: 50px;
+  width: 120px;
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.captcha-img-container:hover {
+  border-color: rgba(255, 79, 99, 0.6);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.captcha-img-container :deep(svg) {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 </style>

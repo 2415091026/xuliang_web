@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
   const { VITE_APP_ENV } = env;
   return {
-    base: VITE_APP_ENV === "production" ? "/web/" : "/",
+    base: VITE_APP_ENV === "production" ? "/" : "/",
     plugins: [
       vue(),
       tailwindcss(),

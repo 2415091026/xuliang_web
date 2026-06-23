@@ -3,7 +3,7 @@ import { ref, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { initSocket, disconnectSocket } from "../utils/socket";
-import { ArrowDown, SwitchButton, User } from "@element-plus/icons-vue";
+import { ArrowDown, SwitchButton, User, ArrowRight, Menu as MenuIcon, Close } from "@element-plus/icons-vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -11,10 +11,10 @@ const router = useRouter();
 const navLinks = [
   { name: "home", label: "首页" },
   { name: "music-songs", label: "音乐" },
-  { name: "music-albums", label: "专辑" },
-  { name: "photos", label: "照片集" },
+  // { name: "music-albums", label: "专辑" },
+  // { name: "photos", label: "照片集" },
   { name: "community", label: "社区" },
-  { name: "about", label: "关于" }
+  // { name: "about", label: "关于" }
 ];
 
 // 用户信息响应式变量
@@ -69,11 +69,18 @@ onBeforeUnmount(() => {
   window.removeEventListener("scroll", handleScroll);
 });
 
-// 监听路由变化，及时更新登录态（例如从登录页跳转回主页）
+// 控制移动端菜单显隐
+const isMobileMenuOpen = ref(false);
+const toggleMobileMenu = () => {
+  isMobileMenuOpen.value = !isMobileMenuOpen.value;
+};
+
+// 监听路由变化，及时更新登录态与自收起折叠菜单
 watch(
   () => route.path,
   () => {
     checkLoginStatus();
+    isMobileMenuOpen.value = false;
   }
 );
 
@@ -82,12 +89,24 @@ const isDropdownVisible = ref(false);
 const handleVisibleChange = (visible) => {
   isDropdownVisible.value = visible;
 };
+
+// 导航拦截控制：未登录下阻止访问音乐/社区并跳去登录页
+const handleNavClick = (e, item, navigate) => {
+  const protectedRoutes = ["music-songs", "community"];
+  if (protectedRoutes.includes(item.name) && !userInfo.value) {
+    e.preventDefault();
+    ElMessage.warning(`请先登录账号再访问${item.label}`);
+    router.push({ name: "login" });
+  } else {
+    navigate(e);
+  }
+};
 </script>
 <template>
   <nav class="fixed left-0 right-0 top-0 z-40 transition-all duration-300" :class="[
-    isScrolled
+    (isScrolled || isMobileMenuOpen)
       ? 'h-16 bg-[#08090d]/85 backdrop-blur-md border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)]'
-      : 'h-20 bg-transparent border-b border-transparent'
+      : 'h-20 max-[760px]:h-16 max-[760px]:bg-[#08090d]/85 max-[760px]:backdrop-blur-md max-[760px]:border-b max-[760px]:border-white/10 bg-transparent border-b border-transparent'
   ]">
     <div class="relative mx-auto flex h-full w-full max-w-7xl items-center justify-between px-6 md:px-8">
       <RouterLink class="group flex items-center gap-3 text-left focus-visible:outline-none" :to="{ name: 'home' }"
@@ -108,7 +127,7 @@ const handleVisibleChange = (visible) => {
           <a :href="href"
             class="relative inline-flex h-10 items-center justify-center px-1 text-sm font-black leading-none text-[#fff8ea]/68 transition hover:text-[#fff8ea] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fff8ea]/70"
             :class="isExactActive ? 'text-[#fff8ea]' : ''" :aria-current="isExactActive ? 'page' : undefined"
-            @click="navigate">
+            @click="(e) => handleNavClick(e, item, navigate)">
             {{ item.label }}
             <span class="absolute bottom-[8px] left-1/2 h-px w-5 -translate-x-1/2 bg-[#f2b84b] transition"
               :class="isExactActive ? 'scale-x-100 opacity-100' : 'scale-x-0 opacity-0'"></span>
@@ -116,51 +135,84 @@ const handleVisibleChange = (visible) => {
         </RouterLink>
       </div>
 
-      <!-- 登录态与未登录态显示逻辑 -->
-      <div v-if="userInfo" class="flex items-center">
-        <el-dropdown trigger="hover" placement="bottom-end" :teleported="false" popper-class="custom-logout-dropdown"
-          @visible-change="handleVisibleChange">
-          <!-- 触发按钮 -->
-          <el-button class="user-menu-btn" aria-label="用户菜单">
-            <!-- 头像展示 -->
-            <el-avatar v-if="userInfo.avatar" :size="24" :src="userInfo.avatar" class="mr-1 object-cover" alt="用户头像" />
-            <el-avatar v-else :size="24" class="user-avatar-placeholder">
-              {{ (userInfo.nickName || userInfo.userName || "U").substring(0, 1).toUpperCase() }}
-            </el-avatar>
-            <!-- 昵称展示，防止过长超出布局 -->
-            <span class="max-w-[80px] truncate text-[#fff8ea]">{{ userInfo.nickName || userInfo.userName || "-"
-              }}</span>
-            <!-- 悬浮箭头微动画 -->
-            <el-icon class="text-[#fff8ea]/60 transition-transform duration-200"
-              :class="{ 'rotate-180': isDropdownVisible }">
-              <ArrowDown />
-            </el-icon>
-          </el-button>
+      <!-- 右侧操作区 -->
+      <div class="flex items-center gap-3">
+        <!-- 登录态与未登录态显示逻辑 -->
+        <div v-if="userInfo" class="flex items-center">
+          <el-dropdown trigger="hover" placement="bottom-end" :teleported="false" popper-class="custom-logout-dropdown"
+            @visible-change="handleVisibleChange">
+            <!-- 触发按钮 -->
+            <el-button class="user-menu-btn" aria-label="用户菜单">
+              <!-- 头像展示 -->
+              <el-avatar v-if="userInfo.avatar" :size="24" :src="userInfo.avatar" class="mr-1 object-cover" alt="用户头像" />
+              <el-avatar v-else :size="24" class="user-avatar-placeholder">
+                {{ (userInfo.nickName || userInfo.userName || "U").substring(0, 1).toUpperCase() }}
+              </el-avatar>
+              <!-- 昵称展示，防止过长超出布局 -->
+              <span class="max-w-[80px] truncate text-[#fff8ea]">{{ userInfo.nickName || userInfo.userName || "-" }}</span>
+              <!-- 悬浮箭头微动画 -->
+              <el-icon class="text-[#fff8ea]/60 transition-transform duration-200"
+                :class="{ 'rotate-180': isDropdownVisible }">
+                <ArrowDown />
+              </el-icon>
+            </el-button>
 
-          <!-- 下拉菜单内容 -->
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item @click="router.push({ name: 'user-center' })">
-                <el-icon class="mr-2">
-                  <User />
-                </el-icon>
-                个人中心
-              </el-dropdown-item>
-              <el-dropdown-item @click="handleLogout">
-                <el-icon class="mr-2">
-                  <SwitchButton />
-                </el-icon>
-                退出登录
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+            <!-- 下拉菜单内容 -->
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="router.push({ name: 'user-center' })">
+                  <el-icon class="mr-2">
+                    <User />
+                  </el-icon>
+                  个人中心
+                </el-dropdown-item>
+                <el-dropdown-item @click="handleLogout">
+                  <el-icon class="mr-2">
+                    <SwitchButton />
+                  </el-icon>
+                  退出登录
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+
+        <el-button v-else class="login-btn" @click="router.push({ name: 'login' })">
+          登录
+        </el-button>
+
+        <!-- 移动端汉堡菜单按钮 -->
+        <button 
+          @click="toggleMobileMenu" 
+          class="hidden max-[760px]:flex size-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[#fff8ea] transition hover:bg-white/[0.08] active:scale-95 focus-visible:outline-none"
+          aria-label="切换菜单"
+        >
+          <el-icon size="20">
+            <component :is="isMobileMenuOpen ? Close : MenuIcon" />
+          </el-icon>
+        </button>
       </div>
-
-      <el-button v-else class="login-btn" @click="router.push({ name: 'login' })">
-        登录
-      </el-button>
     </div>
+
+    <!-- 移动端滑出菜单 -->
+    <Transition name="mobile-menu">
+      <div v-if="isMobileMenuOpen" class="fixed inset-x-0 top-[64px] bottom-0 z-30 flex flex-col bg-[#08090d]/95 backdrop-blur-xl border-t border-white/5 px-6 py-8 min-[761px]:hidden">
+        <div class="flex flex-col gap-4">
+          <RouterLink v-for="item in navLinks" :key="item.name" v-slot="{ href, navigate, isExactActive }" custom
+            :to="{ name: item.name }">
+            <a :href="href"
+              class="flex items-center justify-between rounded-2xl border border-white/[0.03] bg-white/[0.02] px-5 py-4 text-base font-black text-[#fff8ea]/80 transition active:bg-white/[0.08] active:text-[#fff8ea]"
+              :class="isExactActive ? 'border-[#f2b84b]/30 bg-[#f2b84b]/[0.03] text-[#fff8ea]' : ''"
+              @click="(e) => { handleNavClick(e, item, navigate); isMobileMenuOpen = false; }">
+              <span>{{ item.label }}</span>
+              <el-icon class="text-[#fff8ea]/40" :class="isExactActive ? 'text-[#f2b84b]' : ''">
+                <ArrowRight />
+              </el-icon>
+            </a>
+          </RouterLink>
+        </div>
+      </div>
+    </Transition>
   </nav>
 </template>
 
@@ -276,5 +328,17 @@ const handleVisibleChange = (visible) => {
 /* 隐藏 element-plus 默认的小箭头，使界面更清爽 */
 :deep(.custom-logout-dropdown .el-popper__arrow) {
   display: none !important;
+}
+
+/* 移动端菜单动效 */
+.mobile-menu-enter-active,
+.mobile-menu-leave-active {
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mobile-menu-enter-from,
+.mobile-menu-leave-to {
+  opacity: 0;
+  transform: translateY(-16px);
 }
 </style>

@@ -20,12 +20,12 @@ const panels = [
       "radial-gradient(circle at 16% 18%, rgba(255,79,63,0.42), transparent 34vw), radial-gradient(circle at 82% 22%, rgba(99,215,231,0.34), transparent 30vw), linear-gradient(135deg, #08090d 0%, #26131d 48%, #07323b 100%)",
     component: markRaw(HeroPanel)
   },
-  {
-    label: "精选作品集",
-    background:
-      "radial-gradient(circle at 76% 18%, rgba(242,184,75,0.42), transparent 30vw), radial-gradient(circle at 14% 78%, rgba(255,122,168,0.28), transparent 32vw), linear-gradient(135deg, #140d11 0%, #33200c 46%, #101114 100%)",
-    component: markRaw(TracksPanel)
-  },
+  // {
+  //   label: "精选作品集",
+  //   background:
+  //     "radial-gradient(circle at 76% 18%, rgba(242,184,75,0.42), transparent 30vw), radial-gradient(circle at 14% 78%, rgba(255,122,168,0.28), transparent 32vw), linear-gradient(135deg, #140d11 0%, #33200c 46%, #101114 100%)",
+  //   component: markRaw(TracksPanel)
+  // },
   // {
   //   label: "关于徐良",
   //   background:

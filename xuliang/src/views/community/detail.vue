@@ -19,7 +19,8 @@ import {
   togglePostLikeApi,
   togglePostCollectApi,
   toggleCommentLikeApi,
-  reportPostApi
+  reportPostApi,
+  getCategoryListApi
 } from "../../api/community";
 
 const route = useRoute();
@@ -375,12 +376,49 @@ const reportReasons = [
   "其他原因"
 ];
 
-// 打开举报弹窗并校验登录
+// 板块分类数据
+const categories = ref([]);
+const fetchCategories = () => {
+  getCategoryListApi({ pageNum: 1, pageSize: 50, status: "0" })
+    .then((res) => {
+      if (res && res.code === 200 && res.data) {
+        categories.value = res.data.list || [];
+      }
+    })
+    .catch((err) => {
+      console.error("加载板块分类失败：", err);
+    });
+};
+
+// 判断当前帖子是否为公告类型
+const isAnnouncementPost = computed(() => {
+  if (!post.value || !post.value.categoryId || categories.value.length === 0) {
+    return false;
+  }
+  const currentCategory = categories.value.find(
+    (c) => c.categoryId === post.value.categoryId
+  );
+  return currentCategory ? currentCategory.name.includes("公告") : false;
+});
+
+// 打开举报弹窗并校验登录与安全拦截限制
 const openReportDialog = () => {
   const token = localStorage.getItem("token") || sessionStorage.getItem("token");
   if (!token) {
     ElMessage.warning("请先登录账号再进行举报操作");
     router.push({ name: "login" });
+    return;
+  }
+
+  // 1. 拦截社区公告类型的帖子举报
+  if (isAnnouncementPost.value) {
+    ElMessage.warning("公告类型的帖子不支持举报");
+    return;
+  }
+
+  // 2. 拦截自己举报自己
+  if (userInfo.value && post.value && userInfo.value.userId === post.value.userId) {
+    ElMessage.warning("不能举报自己发布的帖子");
     return;
   }
   
@@ -429,6 +467,7 @@ onMounted(() => {
   checkLoginStatus();
   fetchPostDetail();
   fetchCommentTree();
+  fetchCategories();
 });
 </script>
 
@@ -443,19 +482,12 @@ onMounted(() => {
         返回社区
       </el-button>
 
-      <!-- 更多操作小按钮 -->
-      <el-dropdown trigger="click">
-        <el-button circle
-          class="!w-8 !h-8 !flex !items-center !justify-center !rounded-full !border-white/5 !bg-white/[0.02] !text-white/40 hover:!bg-white/10 hover:!text-white"
-          :icon="More" />
-
-        <template #dropdown>
-          <el-dropdown-menu class="dark-dropdown-menu">
-            <el-dropdown-item>分享帖子</el-dropdown-item>
-            <el-dropdown-item class="!text-[#ff4f63]" @click="openReportDialog">举报内容</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+      <el-button v-if="post && (!userInfo || userInfo.userId !== post.userId) && !isAnnouncementPost" link @click="openReportDialog" class="!text-white/50 hover:!text-[#ff4f63] !font-bold !text-xs group">
+        <el-icon class="mr-1 group-hover:rotate-12 transition-transform">
+          <Warning />
+        </el-icon>
+        举报内容
+      </el-button>
     </div>
 
     <!-- 帖子主体大卡片 -->
@@ -581,7 +613,7 @@ onMounted(() => {
         </div>
 
         <!-- 举报 -->
-        <el-button link
+        <el-button v-if="post && (!userInfo || userInfo.userId !== post.userId) && !isAnnouncementPost" link @click="openReportDialog"
           class="!text-white/30 hover:!text-[#ff4f63]/80 !text-xs !font-bold !flex !items-center !gap-1.5">
           <el-icon>
             <Warning />

@@ -14,11 +14,13 @@ import {
   FolderOpened,
   Link,
   Location,
-  Calendar
+  Calendar,
+  Plus
 } from "@element-plus/icons-vue";
 import { getPostListApi, getMyCollectedPostsApi } from "../../api/community";
 import { getInfoApi } from "../../api/login";
 import { getSignStatusApi, doSignApi } from "../../api/sign";
+import request from "../../utils/request";
 
 const router = useRouter();
 
@@ -311,31 +313,75 @@ const openEditDialog = () => {
   editDialogVisible.value = true;
 };
 
-// 保存个人资料修改
-const saveProfile = () => {
+// 上传头像前的校验（大小及格式限制）
+const beforeAvatarUpload = (rawFile) => {
+  if (!rawFile.type.startsWith("image/")) {
+    ElMessage.error("头像文件只能是图片格式！");
+    return false;
+  }
+  if (rawFile.size / 1024 / 1024 > 5) {
+    ElMessage.error("图片大小不能超过 5MB！");
+    return false;
+  }
+  return true;
+};
+
+// 自定义头像文件上传请求，走自带Token拦截的axios实例
+const customAvatarUpload = async (options) => {
+  const { file, onSuccess, onError } = options;
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const res = await request.post("/admin/common/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" }
+    });
+    if (res && res.code === 200 && res.data?.url) {
+      editForm.value.avatar = res.data.url;
+      onSuccess(res.data);
+      ElMessage.success("头像上传并回填成功！");
+    } else {
+      ElMessage.error(res?.msg || "头像上传失败");
+      onError(new Error(res?.msg || "上传失败"));
+    }
+  } catch (err) {
+    console.error("头像上传异常：", err);
+    ElMessage.error("头像上传网络异常，请重试");
+    onError(err);
+  }
+};
+
+// 保存个人资料修改，对接后端 PUT 接口实现真正持久化
+const saveProfile = async () => {
   if (!editForm.value.nickName.trim()) {
     ElMessage.warning("昵称不能为空");
     return;
   }
 
   editLoading.value = true;
+  try {
+    const res = await request.put("/admin/system/user/profile", {
+      nickName: editForm.value.nickName,
+      remark: editForm.value.remark,
+      avatar: editForm.value.avatar,
+      email: userInfo.value.email || "",
+      phonenumber: userInfo.value.phonenumber || "",
+      sex: userInfo.value.sex || "0"
+    });
 
-  const updatedInfo = {
-    ...userInfo.value,
-    nickName: editForm.value.nickName,
-    remark: editForm.value.remark,
-    avatar: editForm.value.avatar
-  };
-
-  localStorage.setItem("userInfo", JSON.stringify(updatedInfo));
-  sessionStorage.setItem("userInfo", JSON.stringify(updatedInfo));
-  userInfo.value = updatedInfo;
-
-  setTimeout(() => {
-    ElMessage.success("资料更新成功！");
+    if (res && res.code === 200) {
+      ElMessage.success("资料更新成功！");
+      await fetchLatestUserInfo();
+      editDialogVisible.value = false;
+    } else {
+      ElMessage.error(res?.msg || "资料更新失败");
+    }
+  } catch (err) {
+    console.error("更新个人资料异常：", err);
+    ElMessage.error("更新资料失败，请重试");
+  } finally {
     editLoading.value = false;
-    editDialogVisible.value = false;
-  }, 500);
+  }
 };
 
 // 重构所需的辅助变量与计算属性
@@ -840,8 +886,33 @@ onMounted(() => {
             show-word-limit />
         </el-form-item>
 
-        <el-form-item label="头像地址 (URL)">
-          <el-input v-model="editForm.avatar" placeholder="请输入网络头像 URL 链接 (选填)" />
+        <el-form-item label="个人头像" class="avatar-form-item">
+          <div class="avatar-upload-container">
+            <el-upload
+              class="avatar-uploader"
+              action=""
+              :show-file-list="false"
+              :http-request="customAvatarUpload"
+              :before-upload="beforeAvatarUpload"
+            >
+              <!-- 已有头像预览 -->
+              <div v-if="editForm.avatar" class="avatar-preview-box">
+                <img :src="editForm.avatar" class="avatar-img" />
+                <div class="avatar-hover-mask">
+                  <el-icon class="camera-icon"><Edit /></el-icon>
+                  <span class="hover-text">更换头像</span>
+                </div>
+              </div>
+              <!-- 无头像占位 -->
+              <div v-else class="avatar-empty-box">
+                <div class="empty-icon-wrap">
+                  <el-icon class="plus-icon"><Plus /></el-icon>
+                </div>
+                <span class="upload-hint-text">上传头像</span>
+              </div>
+            </el-upload>
+            <div class="upload-tip">支持 JPG、PNG 格式，大小不超过 5MB</div>
+          </div>
         </el-form-item>
       </el-form>
 
@@ -2392,5 +2463,149 @@ onMounted(() => {
   color: rgba(255, 255, 255, 0.24) !important;
   box-shadow: none !important;
   cursor: not-allowed !important;
+}
+
+/* ==================== 个人头像上传样式优化 ==================== */
+.avatar-form-item :deep(.el-form-item__content) {
+  justify-content: center;
+}
+
+.avatar-upload-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 10px 0 0 0;
+}
+
+.avatar-uploader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 预览框样式 */
+.avatar-preview-box {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.avatar-preview-box:hover {
+  border-color: rgba(242, 184, 75, 0.6);
+  transform: scale(1.03);
+  box-shadow: 0 12px 32px rgba(242, 184, 75, 0.2);
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 悬停时的磨砂玻璃蒙版 */
+.avatar-hover-mask {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity 0.3s ease;
+}
+
+.avatar-preview-box:hover .avatar-hover-mask {
+  opacity: 1;
+}
+
+.camera-icon {
+  color: #fff;
+  font-size: 22px;
+}
+
+.hover-text {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 800;
+}
+
+/* 空状态占位框 */
+.avatar-empty-box {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.avatar-empty-box:hover {
+  border-color: #f2b84b;
+  background-color: rgba(242, 184, 75, 0.03);
+  box-shadow: 0 0 20px rgba(242, 184, 75, 0.15);
+  transform: scale(1.03);
+}
+
+.empty-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.05);
+  margin-bottom: 6px;
+  transition: all 0.3s ease;
+}
+
+.avatar-empty-box:hover .empty-icon-wrap {
+  background-color: rgba(242, 184, 75, 0.2);
+  transform: rotate(90deg);
+}
+
+.plus-icon {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 18px;
+  transition: color 0.3s ease;
+}
+
+.avatar-empty-box:hover .plus-icon {
+  color: #f2b84b;
+}
+
+.upload-hint-text {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 800;
+  transition: color 0.3s ease;
+}
+
+.avatar-empty-box:hover .upload-hint-text {
+  color: #f2b84b;
+}
+
+/* 提示文字 */
+.upload-tip {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 12px;
+  font-weight: 600;
+  text-align: center;
 }
 </style>

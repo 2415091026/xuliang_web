@@ -31,3 +31,13 @@ export const registerApi = (data) => {
     data
   });
 };
+
+// 获取验证码接口
+export const getCodeImgApi = () => {
+  return request({
+    url: "/admin/captchaImage",
+    method: "get",
+    timeout: 20000
+  });
+};
+
